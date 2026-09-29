@@ -1,0 +1,26 @@
+from models.deployment import DeploymentStatus
+
+ALLOWED_TRANSITIONS = {
+    DeploymentStatus.QUEUED: [
+        DeploymentStatus.BUILDING,
+        DeploymentStatus.FAILED
+    ],
+    DeploymentStatus.BUILDING: [
+        DeploymentStatus.DEPLOYING,
+        DeploymentStatus.FAILED
+    ],
+    DeploymentStatus.DEPLOYING: [
+        DeploymentStatus.RUNNING,
+        DeploymentStatus.FAILED
+    ],
+    DeploymentStatus.RUNNING: [],
+    DeploymentStatus.FAILED: []
+}
+
+def update_deployment_status(deployment, new_status: DeploymentStatus, failure_reason: str | None = None):
+    if new_status not in ALLOWED_TRANSITIONS[deployment.status]:
+        raise ValueError('Invalid deployment status transition')
+
+    deployment.status = new_status
+    if new_status == DeploymentStatus.FAILED:
+        deployment.failure_reason = failure_reason
