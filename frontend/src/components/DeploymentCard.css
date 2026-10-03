@@ -1,0 +1,28 @@
+.deployment-card {
+    text-align: left;
+    background-color: #e2e9fc;
+    padding: 20px;
+    margin: 30px 30px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    margin-bottom: 16px;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.deployment-card:hover{
+    box-shadow: 18px;
+    transform: translateY(-2px);
+}
+
+.deployment-card h2 {
+    font-size: 18px;
+    margin: 0 0 8px;
+    color: #111827;
+}
+
+.deployment-card p {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0;
+}

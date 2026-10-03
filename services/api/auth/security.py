@@ -43,6 +43,5 @@ def verify_token(token: str, token_type: str):
 
     except Exception:
         return None
-    
 
 
