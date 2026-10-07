@@ -1,0 +1,222 @@
+.deployment-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 20px 22px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.deployment-card:hover {
+  border-color: var(--color-border-hover);
+  background: var(--color-surface-secondary);
+}
+
+.deployment-card-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.deployment-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.deployment-card-label {
+  margin-bottom: 6px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.deployment-card h2 {
+  margin-bottom: 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.deployment-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  padding: 5px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+
+.deployment-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.deployment-status-queued {
+  color: var(--color-status-queued);
+}
+
+.deployment-status-building {
+  color: var(--color-status-building);
+}
+
+.deployment-status-deploying {
+  color: var(--color-status-deploying);
+}
+
+.deployment-status-running {
+  color: var(--color-status-running);
+}
+
+.deployment-status-failed {
+  color: var(--color-status-failed);
+}
+
+.deployment-card-meta {
+  display: flex;
+  gap: 32px;
+  margin-top: 18px;
+}
+
+.deployment-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.deployment-meta-item > span {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+
+.deployment-meta-item code,
+.deployment-meta-item time {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deployment-card-failure {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border-left: 2px solid var(--color-status-failed);
+  background: rgba(248, 113, 113, 0.05);
+}
+
+.deployment-card-failure span {
+  color: var(--color-status-failed);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.deployment-card-failure p {
+  margin: 5px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.deployment-card-error {
+  margin: 14px 0 0;
+  color: var(--color-status-failed);
+  font-size: 12px;
+}
+
+.deployment-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.deployment-card-button {
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.deployment-card-button:hover:not(:disabled) {
+  border-color: var(--color-border-hover);
+  background: rgba(34, 211, 238, 0.05);
+  color: var(--color-accent);
+}
+
+.deployment-card-button:disabled {
+  opacity: 0.45;
+}
+
+.deployment-card-link {
+  color: var(--color-accent);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.deployment-card-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 700px) {
+  .deployment-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .deployment-card-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .deployment-card-meta {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .deployment-card-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .deployment-card-button {
+    width: 100%;
+  }
+
+  .deployment-card-link {
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deployment-card,
+  .deployment-card-button {
+    transition: none;
+  }
+}

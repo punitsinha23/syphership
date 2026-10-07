@@ -1,0 +1,71 @@
+:root {
+  /* ================================
+     Colors
+     ================================ */
+
+  /* Backgrounds */
+  --color-bg: #070a0f;
+  --color-surface: #0b1017;
+  --color-surface-secondary: #0d131b;
+  --color-surface-tertiary: #111820;
+
+  /* Accent */
+  --color-accent: #22d3ee;
+  --color-accent-hover: #67e8f9;
+
+  /* Text */
+  --color-text-primary: #f5f7fa;
+  --color-text-secondary: #a7b0bb;
+  --color-text-muted: #687482;
+
+  /* Status */
+  --color-status-running: #4ade80;
+  --color-status-building: #fbbf24;
+  --color-status-failed: #f87171;
+  --color-status-queued: #94a3b8;
+  --color-status-deploying: #38bdf8;
+
+  /* Borders */
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-hover: rgba(34, 211, 238, 0.35);
+
+
+  /* ================================
+     Typography
+     ================================ */
+
+  --font-sans: "Inter", "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+
+  /* ================================
+     Border Radius
+     ================================ */
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+
+  /* ================================
+     Shadows
+     ================================ */
+
+  --shadow-glow: 0 0 24px rgba(34, 211, 238, 0.12);
+
+
+  /* ================================
+     Transitions
+     ================================ */
+
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+
+
+  /* ================================
+     Layout
+     ================================ */
+
+  --sidebar-width: 240px;
+  --content-max-width: 1400px;
+}

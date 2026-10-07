@@ -34,38 +34,27 @@ export function createDeployment(project_id, commit_sha) {
     })
 }
 
-export async function getDeployments(){
-    const token = localStorage.getItem("access_token")
-
-    const response = await fetch("http://localhost:8000/deployments/",{
-        method: "GET",
-        headers: {
-            "Authorization": `Bearer ${token}`
-        },
-    })
-
-    if(!response.ok){
-        const error = await response.json()
-        throw new Error(error.message || "Failed to fetch deployment");
-    }
-
-    const data = await response.json()
-
-    return data
+export function getDeployments(project_id) {
+    return apiFetch(`/deployments/?project_id=${project_id}`)
 }
 
-export async function updateStatus(deployment_id, status) {
-    const token = localStorage.getItem("access_token")
-
-    return apiFetch(`/deployments/${deployment_id}/status`,{
+export function updateStatus(deployment_id, status) {
+    return apiFetch(`/deployments/${deployment_id}/status`, {
         method: "PATCH",
         headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
+            "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            "status": status
+            status: status
         })
     })
+}
 
+export function getDeployment(deployment_id){
+    return apiFetch(`/deployments/${deployment_id}`, {
+        method: "GET",
+        headers: {
+            "Content-Type": "application/json"
+        }
+    })
 }

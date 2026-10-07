@@ -37,6 +37,14 @@ function logout() {
     window.location.href = "/login"
 }
 
+function formatDetail(detail) {
+    // FastAPI validation errors (422) return detail as a list of objects
+    if (Array.isArray(detail)) {
+        return detail.map((item) => item.msg).join(", ")
+    }
+    return detail
+}
+
 function send(path, options, token) {
     return fetch(`${API_URL}${path}`, {
         ...options,
@@ -65,11 +73,20 @@ export async function apiFetch(path, options = {}) {
         }
     }
 
-    const data = await response.json()
-
     if (!response.ok) {
-        throw new Error(data.detail || "Request failed")
+        let errorMessage = `Request failed with status ${response.status}`
+        try {
+            const errorData = await response.json()
+            errorMessage = errorData.detail || errorMessage
+        } catch {
+            throw new Error(`Request failed with status ${response.status}`)
+        }
+        throw new Error(errorMessage)
     }
 
-    return data
+    try {
+        return await response.json()
+    } catch {
+        throw new Error(`Request failed with status ${response.status}`)
+    }
 }

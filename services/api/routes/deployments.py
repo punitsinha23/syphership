@@ -44,14 +44,18 @@ def create_deployment(
 
 @router.get("/", response_model=list[DeploymentResponse])
 def get_deployments(
+    project_id: int | None = None,
     db: Session = Depends(get_db),
     user=Depends(get_current_user)
 ):
-    deployments = db.query(Deployment).join(Project).filter(
+    query = db.query(Deployment).join(Project).filter(
         Project.user_id == user.id
-    ).all()
+    )
 
-    return deployments
+    if project_id is not None:
+        query = query.filter(Deployment.project_id == project_id)
+
+    return query.all()
 
 
 @router.get("/{deployment_id}", response_model=DeploymentResponse)
@@ -83,7 +87,7 @@ def update_status(
     deployment_db = db.query(Deployment).join(Project).filter(
         Deployment.id == deployment_id,
         Project.user_id == user.id
-    ).first()
+    ).with_for_update(of=Deployment).first()
 
     if deployment_db is None:
         raise HTTPException(

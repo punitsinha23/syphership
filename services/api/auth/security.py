@@ -8,7 +8,11 @@ from pathlib import Path
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 password_hash = PasswordHash.recommended()
-SECRET_KEY = f"{os.getenv("SECRET_KEY")}"
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY environment variable is not set.") 
+
 ALGORITHM = "HS256"
 
 def hash_password(password: str) -> str:
