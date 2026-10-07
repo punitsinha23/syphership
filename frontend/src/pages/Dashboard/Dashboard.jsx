@@ -2,8 +2,8 @@ import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { getProjects } from "../../api/projects"
 import { getUser } from "../../api/user"
-import { ProjectCard } from "../../components/ProjectCard"
-import { Navbar } from "../../components/Navbar"
+import { ProjectCard } from "../../components/ProjectCard/ProjectCard"
+import { Navbar } from "../../components/Navbar/Navbar"
 import "./Dashboard.css"
 
 function Dashboard() {

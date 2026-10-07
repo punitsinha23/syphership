@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { getProjects, createProject } from "../../api/projects"
-import { ProjectCard } from "../../components/ProjectCard"
-import { Navbar } from "../../components/Navbar"
+import { ProjectCard } from "../../components/ProjectCard/ProjectCard"
+import { Navbar } from "../../components/Navbar/Navbar"
 import "./Project.css"
 
 function Projects() {

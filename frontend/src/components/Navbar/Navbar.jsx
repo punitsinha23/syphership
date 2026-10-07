@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom"
-import { getUser } from "../api/user"
+import { getUser } from "../../api/user"
 import { useEffect, useState } from "react"
 import "./Navbar.css"
 

@@ -1,14 +1,14 @@
 import {BrowserRouter, Routes, Route} from "react-router-dom"
-import ProtectedRoute from "./components/ProtectedRoute"
-import { SpaceBackground } from "./components/SpaceBackground"
-import { RocketCursor } from "./components/RocketCursor"
+import ProtectedRoute from "./components/ProtectedRoute/ProtectedRoute"
+import { SpaceBackground } from "./components/SpaceBackground/SpaceBackground"
+import { RocketCursor } from "./components/RocketCursor/RocketCursor"
 
-import Login from "./pages/Login"
-import Register from "./pages/Register"
+import Login from "./pages/Login/Login"
+import Register from "./pages/Register/Register"
 import Dashboard from "./pages/Dashboard/Dashboard"
 import Projects from "./pages/Project/Project"
 import ProjectDetails from "./pages/ProjectDetails/ProjectDetails"
-import DeploymentDetails from "./pages/DeploymentDetails"
+import DeploymentDetails from "./pages/DeploymentDetails/DeploymentDetails"
 
 
 

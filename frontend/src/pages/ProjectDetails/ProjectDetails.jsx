@@ -4,7 +4,7 @@ import { useParams } from "react-router-dom"
 import { getProjectDetails, createDeployment, getDeployments } from "../../api/projects"
 import { generateMockSha } from "../../utils/mockCommit"
 import { DeploymentCard } from "../../components/DeploymentCard/DeploymentCard"
-import { Navbar } from "../../components/Navbar"
+import { Navbar } from "../../components/Navbar/Navbar"
 import "./ProjectDetails.css"
 
 

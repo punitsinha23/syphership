@@ -2,7 +2,7 @@ import { getDeployment } from "../api/projects"
 import { useState, useEffect } from "react"
 import { useParams } from "react-router-dom"
 import DeploymentTimeline from "../components/DeploymentTimeline"
-import BuildLogs from "../components/BuildLogs"
+import BuildLogs from "../components/BuildLogs/BuildLogs"
 import { Navbar } from "../components/Navbar"
 import "./DeploymentDetails.css"
 
