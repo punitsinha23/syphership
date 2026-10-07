@@ -20,6 +20,12 @@ export function Navbar() {
         return location.pathname.startsWith(path)
     }
 
+    function handleLogout() {
+        localStorage.removeItem("access_token")
+        localStorage.removeItem("refresh_token")
+        navigate("/")
+    }
+
     return (
         <nav className="navbar">
             <div className="navbar-logo" onClick={() => navigate("/dashboard")}>
@@ -45,6 +51,9 @@ export function Navbar() {
 
             <div className="navbar-user">
                 {username && <span className="navbar-username">{username}</span>}
+                <button className="navbar-logout" onClick={handleLogout}>
+                    Logout
+                </button>
             </div>
         </nav>
     )

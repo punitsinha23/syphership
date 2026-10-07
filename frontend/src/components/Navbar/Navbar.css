@@ -65,12 +65,36 @@
   margin-top: auto;
   padding: 16px 12px 0;
   border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .navbar-username {
   color: var(--color-text-muted);
   font-family: var(--font-mono);
   font-size: 12px;
+}
+
+.navbar-logout {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.navbar-logout:hover {
+  border-color: rgba(248, 113, 113, 0.3);
+  color: var(--color-status-failed);
+  background: rgba(248, 113, 113, 0.05);
 }
 
 @media (max-width: 700px) {

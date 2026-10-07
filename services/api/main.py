@@ -1,6 +1,7 @@
 from fastapi import Depends, FastAPI
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, Base, get_db
@@ -10,6 +11,9 @@ from models.deployment import Deployment
 from auth.routes import router as auth_router
 from routes.projects import router as project_router
 from routes.deployments import router as deployment_router
+from github.routes import router as github_router
+
+load_dotenv()
 
 app = FastAPI(title="Syphership API")
 
@@ -24,6 +28,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(project_router)
 app.include_router(deployment_router)
+app.include_router(github_router)
 
 print(Base.metadata.tables.keys())
 Base.metadata.create_all(bind=engine)
