@@ -1,0 +1,167 @@
+.pipeline {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  margin: 0;
+  padding: 24px 22px 22px;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.pipeline-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding-right: 16px;
+}
+
+/* Connector line from this node to the next */
+.pipeline-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 10px;
+  left: 30px;
+  right: 8px;
+  height: 1px;
+  background: var(--color-border-strong);
+}
+
+.pipeline-step-done:not(:last-child)::after {
+  background: linear-gradient(90deg, var(--color-accent), rgba(34, 211, 238, 0.4));
+}
+
+.pipeline-node {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  margin-bottom: 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+}
+
+.pipeline-step-done .pipeline-node {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #061014;
+}
+
+.pipeline-step-active .pipeline-node {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.12);
+}
+
+.pipeline-step-active .pipeline-node::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  animation: pipeline-pulse 1.4s ease-in-out infinite alternate;
+}
+
+.pipeline-step-error .pipeline-node {
+  border-color: var(--color-status-failed);
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--color-status-failed);
+}
+
+.pipeline-step-unknown .pipeline-node {
+  border-style: dashed;
+}
+
+@keyframes pipeline-pulse {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+
+.pipeline-index {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+}
+
+.pipeline-label {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pipeline-step-done .pipeline-label,
+.pipeline-step-active .pipeline-label {
+  color: var(--color-text-primary);
+}
+
+.pipeline-step-active .pipeline-index {
+  color: var(--color-accent);
+}
+
+.pipeline-step-error .pipeline-label,
+.pipeline-step-error .pipeline-index {
+  color: var(--color-status-failed);
+}
+
+.pipeline-hint {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pipeline-step-active .pipeline-hint {
+  color: var(--color-accent);
+}
+
+@media (max-width: 700px) {
+  .pipeline {
+    grid-auto-flow: row;
+    gap: 18px;
+    padding: 20px 18px;
+  }
+
+  .pipeline-step {
+    display: grid;
+    grid-template-columns: 21px auto 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 12px;
+    row-gap: 2px;
+    padding-right: 0;
+  }
+
+  .pipeline-node {
+    grid-row: 1 / 3;
+    margin-bottom: 0;
+  }
+
+  .pipeline-hint {
+    grid-column: 2 / 4;
+  }
+
+  /* Vertical connector */
+  .pipeline-step:not(:last-child)::after {
+    top: 25px;
+    left: 10px;
+    right: auto;
+    bottom: -16px;
+    width: 1px;
+    height: auto;
+  }
+
+  .pipeline-step-done:not(:last-child)::after {
+    background: var(--color-accent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pipeline-step-active .pipeline-node::before {
+    animation: none;
+  }
+}

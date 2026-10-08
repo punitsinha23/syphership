@@ -21,8 +21,9 @@ uvicorn==0.52.4
 uvloop==0.22.1
 watchfiles==1.2.0
 websockets==17.1
-pwdlib[argon2]
+cryptography
 python-jose
 email-validator
 pytest
 httpx
+alembic

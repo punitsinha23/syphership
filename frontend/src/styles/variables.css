@@ -8,6 +8,7 @@
   --color-surface: #0b1017;
   --color-surface-secondary: #0d131b;
   --color-surface-tertiary: #111820;
+  --color-surface-hover: #0f161f;
 
   /* Accent */
   --color-accent: #22d3ee;
@@ -28,13 +29,15 @@
   /* Borders */
   --color-border: rgba(255, 255, 255, 0.1);
   --color-border-hover: rgba(34, 211, 238, 0.35);
+  --color-border-strong: rgba(255, 255, 255, 0.16);
+  --color-accent-soft: rgba(34, 211, 238, 0.08);
 
 
   /* ================================
      Typography
      ================================ */
 
-  --font-sans: "Inter", "Space Grotesk", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
 
 
@@ -52,6 +55,7 @@
      ================================ */
 
   --shadow-glow: 0 0 24px rgba(34, 211, 238, 0.12);
+  --shadow-card: 0 8px 30px rgba(0, 0, 0, 0.35);
 
 
   /* ================================
@@ -67,5 +71,6 @@
      ================================ */
 
   --sidebar-width: 240px;
-  --content-max-width: 1400px;
+  --content-max-width: 1180px;
+  --page-padding: 40px 48px;
 }

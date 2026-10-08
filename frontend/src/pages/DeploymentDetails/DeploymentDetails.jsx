@@ -1,13 +1,24 @@
-import { getDeployment } from "../../api/projects"
+import { getDeployment, getProjectDetails } from "../../api/projects"
 import { useState, useEffect } from "react"
-import { useParams } from "react-router-dom"
+import { Link, useParams } from "react-router-dom"
 import DeploymentTimeline from "../../components/DeploymentTimeline/DeploymentTimeline"
 import BuildLogs from "../../components/BuildLogs/BuildLogs"
 import { Navbar } from "../../components/Navbar/Navbar"
+import { StatusBadge } from "../../components/StatusBadge/StatusBadge"
+import { formatDateTime, parseApiDate, shortSha, timeAgo } from "../../utils/time"
 import "./DeploymentDetails.css"
+
+function formatDuration(start, end) {
+    const seconds = Math.max(0, Math.round((parseApiDate(end) - parseApiDate(start)) / 1000))
+    if (seconds < 60) return `${seconds}s`
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}m ${seconds % 60}s`
+    return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+}
 
 function DeploymentDetails() {
     const [deploymentDetails, setDeploymentDetails] = useState(null)
+    const [project, setProject] = useState(null)
     const [error, setError] = useState(null)
     const [loading, setLoading] = useState(true)
 
@@ -26,6 +37,11 @@ function DeploymentDetails() {
                     if (!cancelled) {
                         setDeploymentDetails(data)
                     }
+
+                    // Only used for the breadcrumb, so a failure here isn't fatal
+                    getProjectDetails(data.project_id)
+                        .then((projectData) => !cancelled && setProject(projectData))
+                        .catch(() => {})
                 } catch (error) {
                     if (!cancelled) {
                         if (error.status === 404) {
@@ -48,83 +64,93 @@ function DeploymentDetails() {
             }
         }, [deployment_id])
 
-    if (loading) {
-        return (
-            <div className="deployment-details-state">
-                <p>Loading deployment...</p>
-            </div>
-        )
-    }
-
-    if (error) {
-        return (
-            <div className="deployment-details-state deployment-details-error">
-                <p>{error}</p>
-            </div>
-        )
-    }
-
-    if (!deploymentDetails) {
-        return (
-            <div className="deployment-details-state">
-                <p>Deployment not found</p>
-            </div>
-        )
-    }
+    const d = deploymentDetails
+    const finished = d && (d.status === "RUNNING" || d.status === "FAILED")
 
     return (
-        <div className="deployment-details">
+        <div className="app-page">
             <Navbar />
 
-            <header className="deployment-details-header">
-                <div>
-                    <p className="deployment-details-eyebrow">
-                        DEPLOYMENT
-                    </p>
-                    <h1>Deployment #{deploymentDetails.id}</h1>
-                </div>
-                <span className={`deployment-status deployment-status-${deploymentDetails.status.toLowerCase()}`}>
-                    <span className="deployment-status-dot" />
-                    {deploymentDetails.status}
-                </span>
-            </header>
-
-            <main className="deployment-details-content">
-                <section className="deployment-details-info">
-                    <div className="deployment-detail-item">
-                        <span className="deployment-detail-label">COMMIT SHA</span>
-                        <code className="deployment-detail-value">{deploymentDetails.commit_sha}</code>
-                    </div>
-                    <div className="deployment-detail-item">
-                        <span className="deployment-detail-label">CREATED</span>
-                        <span className="deployment-detail-value">
-                            {new Date(deploymentDetails.created_at).toLocaleString()}
-                        </span>
-                    </div>
-                    <div className="deployment-detail-item">
-                        <span className="deployment-detail-label">UPDATED</span>
-                        <span className="deployment-detail-value">
-                            {new Date(deploymentDetails.updated_at).toLocaleString()}
-                        </span>
-                    </div>
-                    {deploymentDetails.failure_reason && (
-                        <div className="deployment-detail-item">
-                            <span className="deployment-detail-label">FAILURE REASON</span>
-                            <span className="deployment-detail-value deployment-detail-failure">
-                                {deploymentDetails.failure_reason}
-                            </span>
-                        </div>
+            <main className="app-container">
+                <nav className="breadcrumb" aria-label="Breadcrumb">
+                    <Link to="/projects">Projects</Link>
+                    <span className="breadcrumb-sep">/</span>
+                    {d ? (
+                        <Link to={`/projects/${d.project_id}`}>{project?.name ?? `Project #${d.project_id}`}</Link>
+                    ) : (
+                        <span>…</span>
                     )}
-                </section>
+                    <span className="breadcrumb-sep">/</span>
+                    <span>#{deployment_id}</span>
+                </nav>
 
-                <section className="deployment-details-section">
-                    <h2>Timeline</h2>
-                    <DeploymentTimeline status={deploymentDetails.status} />
-                </section>
+                {loading ? (
+                    <div className="loading-state">Loading deployment…</div>
+                ) : error ? (
+                    <div className="empty-state">
+                        <h3>{error}</h3>
+                        <p>It may have been deleted, or it belongs to another account.</p>
+                        <Link className="btn btn-secondary" to="/projects">Back to projects</Link>
+                    </div>
+                ) : d && (
+                    <>
+                        <header className="page-header">
+                            <div className="page-header-main">
+                                <h1 className="page-title deployment-title">
+                                    Deployment #{d.id}
+                                    <StatusBadge status={d.status} />
+                                </h1>
+                                <p className="page-subtitle">
+                                    Commit <code className="deployment-inline-sha">{shortSha(d.commit_sha)}</code>
+                                    {" "}· created {timeAgo(d.created_at)}
+                                </p>
+                            </div>
+                        </header>
 
-                <section className="deployment-details-section">
-                    <BuildLogs logs={[]} />
-                </section>
+                        {d.failure_reason && (
+                            <div className="alert alert-error deployment-failure">
+                                <span>
+                                    <strong>Failure reason</strong>
+                                    {d.failure_reason}
+                                </span>
+                            </div>
+                        )}
+
+                        <section className="section">
+                            <div className="section-header">
+                                <h2 className="section-title">Pipeline</h2>
+                            </div>
+                            <DeploymentTimeline status={d.status} />
+                        </section>
+
+                        <section className="section card deployment-info" aria-label="Details">
+                            <div className="deployment-info-item deployment-info-wide">
+                                <span className="deployment-info-label">Commit SHA</span>
+                                <code className="deployment-info-value">{d.commit_sha}</code>
+                            </div>
+                            <div className="deployment-info-item">
+                                <span className="deployment-info-label">Created</span>
+                                <span className="deployment-info-value">{formatDateTime(d.created_at)}</span>
+                            </div>
+                            <div className="deployment-info-item">
+                                <span className="deployment-info-label">Last update</span>
+                                <span className="deployment-info-value">{formatDateTime(d.updated_at)}</span>
+                            </div>
+                            <div className="deployment-info-item">
+                                <span className="deployment-info-label">
+                                    {finished ? "Duration" : "Elapsed"}
+                                </span>
+                                <span className="deployment-info-value">
+                                    {formatDuration(d.created_at, finished ? d.updated_at : new Date().toISOString())}
+                                </span>
+                            </div>
+                        </section>
+
+                        <section className="section">
+                            <BuildLogs logs={[]} />
+                        </section>
+                    </>
+                )}
             </main>
         </div>
     )

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from auth.routes import get_current_user
+from auth.dependencies import get_current_user
 from database import get_db
 from models.user import User
 from models.project import Project
@@ -29,7 +29,7 @@ def create_projects(project: ProjectCreate, db: Session = Depends(get_db), user:
 
 @router.get("/", response_model=list[ProjectResponse])
 def get_projects(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    projects = db.query(Project).filter(Project.user_id == user.id).all()
+    projects = db.query(Project).filter(Project.user_id == user.id).order_by(Project.created_at.desc(), Project.id.desc()).all()
     return projects
 
 

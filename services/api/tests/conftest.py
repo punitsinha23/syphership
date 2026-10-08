@@ -1,16 +1,23 @@
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from database import Base, get_db
+from database import Base, DATABASE_URL, get_db
 from models.user import User
 from models.project import Project
 from models.deployment import Deployment
+from auth.security import create_session_tokens
 from main import app
 
 
-TEST_DATABASE_URL = "postgresql+psycopg://syphership:1234@localhost:5435/syphership_test"
+# Same server/credentials as the dev DB, separate "<db>_test" database
+TEST_DATABASE_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    DATABASE_URL.rsplit("/", 1)[0] + f"/{os.getenv('POSTGRES_DB')}_test",
+)
 
 test_engine = create_engine(TEST_DATABASE_URL)
 
@@ -40,25 +47,32 @@ def client():
     app.dependency_overrides.clear()
 
 @pytest.fixture
-def auth_headers(client):
-    client.post(
-        "/auth/register",
-        json={
-            "email": "auth@example.com",
-            "username": "authuser",
-            "password": "password123"
-        }
-    )
+def make_user():
+    def _make_user(email="auth@example.com", username="authuser"):
+        db = TestingSessionLocal()
+        try:
+            user = User(email=email, username=username)
+            db.add(user)
+            db.commit()
+            return user.id
+        finally:
+            db.close()
 
-    response = client.post(
-        "/auth/login",
-        json={
-            "email": "auth@example.com",
-            "password": "password123"
-        }
-    )
+    return _make_user
 
-    token = response.json()["access_token"]
+
+@pytest.fixture
+def auth_headers(make_user):
+    token = create_session_tokens(make_user())["access_token"]
+
+    return {
+        "Authorization": f"Bearer {token}"
+    }
+
+
+@pytest.fixture
+def user2_headers(make_user):
+    token = create_session_tokens(make_user(email="user2@example.com", username="user2"))["access_token"]
 
     return {
         "Authorization": f"Bearer {token}"

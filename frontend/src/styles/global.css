@@ -1,4 +1,5 @@
 @import "./variables.css";
+@import "./ui.css";
 
 * {
   box-sizing: border-box;
@@ -25,12 +26,29 @@ select {
   font: inherit;
 }
 
-button {
-  cursor: pointer;
+/* Spaceship cursor (public/cursors/*.svg). Hotspot (6, 6) is the ship's nose. */
+html {
+  cursor: url("/cursors/ship.svg") 6 6, auto;
+}
+
+a,
+button,
+input:is([type="button"], [type="submit"], [type="checkbox"], [type="radio"]),
+label,
+select,
+summary,
+[role="button"] {
+  cursor: url("/cursors/ship-active.svg") 6 6, pointer;
 }
 
 button:disabled {
-  cursor: not-allowed;
+  cursor: url("/cursors/ship.svg") 6 6, not-allowed;
+}
+
+/* Keep the I-beam where you type, so placing the caret stays precise */
+input:not([type="button"], [type="submit"], [type="checkbox"], [type="radio"]),
+textarea {
+  cursor: text;
 }
 
 a {

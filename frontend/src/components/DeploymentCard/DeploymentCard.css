@@ -1,222 +1,115 @@
-.deployment-card {
-  display: flex;
+.deployment-row {
+  padding: 12px 18px;
+  transition: background var(--transition-fast);
+}
+
+.deployment-row + .deployment-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.deployment-row:hover {
+  background: var(--color-surface-hover);
+}
+
+.deployment-row-main {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 80px 80px 232px;
   align-items: center;
-  justify-content: space-between;
-  gap: 28px;
-  padding: 20px 22px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast);
+  gap: 16px;
 }
 
-.deployment-card:hover {
-  border-color: var(--color-border-hover);
-  background: var(--color-surface-secondary);
+.deployment-row-main .status {
+  justify-self: start;
 }
 
-.deployment-card-main {
-  min-width: 0;
-  flex: 1;
-}
-
-.deployment-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.deployment-card-label {
-  margin-bottom: 6px;
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-}
-
-.deployment-card h2 {
-  margin-bottom: 0;
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-}
-
-.deployment-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  flex-shrink: 0;
-  padding: 5px 9px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.05em;
-}
-
-.deployment-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.deployment-status-queued {
-  color: var(--color-status-queued);
-}
-
-.deployment-status-building {
-  color: var(--color-status-building);
-}
-
-.deployment-status-deploying {
-  color: var(--color-status-deploying);
-}
-
-.deployment-status-running {
-  color: var(--color-status-running);
-}
-
-.deployment-status-failed {
-  color: var(--color-status-failed);
-}
-
-.deployment-card-meta {
-  display: flex;
-  gap: 32px;
-  margin-top: 18px;
-}
-
-.deployment-meta-item {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-
-.deployment-meta-item > span {
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.1em;
-}
-
-.deployment-meta-item code,
-.deployment-meta-item time {
+.deployment-row-title {
   overflow: hidden;
-  color: var(--color-text-secondary);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  color: var(--color-text-primary);
+  font-size: 13.5px;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.deployment-card-failure {
-  margin-top: 16px;
-  padding: 10px 12px;
-  border-left: 2px solid var(--color-status-failed);
-  background: rgba(248, 113, 113, 0.05);
+.deployment-row-title:hover {
+  color: var(--color-accent);
 }
 
-.deployment-card-failure span {
-  color: var(--color-status-failed);
+.deployment-row-sha {
+  color: var(--color-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
-  text-transform: uppercase;
-}
-
-.deployment-card-failure p {
-  margin: 5px 0 0;
-  color: var(--color-text-secondary);
   font-size: 12px;
 }
 
-.deployment-card-error {
-  margin: 14px 0 0;
-  color: var(--color-status-failed);
+.deployment-row-time {
+  color: var(--color-text-muted);
   font-size: 12px;
 }
 
-.deployment-card-actions {
+.deployment-row-actions {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
-.deployment-card-button {
-  min-height: 36px;
-  padding: 0 13px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-secondary);
+.deployment-row-failure,
+.deployment-row-error {
+  margin: 10px 0 2px 136px;
+  padding: 8px 12px;
+  border-left: 2px solid var(--color-status-failed);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: rgba(248, 113, 113, 0.06);
+  color: #fca5a5;
+  font-family: var(--font-mono);
   font-size: 12px;
-  transition:
-    border-color var(--transition-fast),
-    color var(--transition-fast),
-    background var(--transition-fast);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
-.deployment-card-button:hover:not(:disabled) {
-  border-color: var(--color-border-hover);
-  background: rgba(34, 211, 238, 0.05);
-  color: var(--color-accent);
+.deployment-row-error {
+  border-left-color: var(--color-status-building);
+  background: rgba(251, 191, 36, 0.06);
+  color: var(--color-status-building);
 }
 
-.deployment-card-button:disabled {
-  opacity: 0.45;
+@media (max-width: 900px) {
+  .deployment-row-main {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    row-gap: 8px;
+  }
+
+  .deployment-row-sha,
+  .deployment-row-time {
+    display: none;
+  }
+
+  .deployment-row-actions {
+    min-width: 0;
+  }
+
+  .deployment-row-failure,
+  .deployment-row-error {
+    margin-left: 0;
+  }
 }
 
-.deployment-card-link {
-  color: var(--color-accent);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.deployment-card-link:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-@media (max-width: 700px) {
-  .deployment-card {
-    align-items: stretch;
-    flex-direction: column;
+@media (max-width: 520px) {
+  .deployment-row {
+    padding: 12px 14px;
   }
 
-  .deployment-card-header {
-    align-items: flex-start;
-    flex-direction: column;
+  .deployment-row-next {
+    display: none;
   }
 
-  .deployment-card-meta {
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .deployment-card-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .deployment-card-button {
-    width: 100%;
-  }
-
-  .deployment-card-link {
-    text-align: center;
+  /* The title already links to the deployment */
+  .deployment-row-actions .btn-ghost {
+    display: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .deployment-card,
-  .deployment-card-button {
+  .deployment-row {
     transition: none;
   }
 }

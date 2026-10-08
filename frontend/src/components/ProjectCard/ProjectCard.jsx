@@ -1,18 +1,32 @@
 import "./ProjectCard.css"
-import { useNavigate } from "react-router-dom"
+import { Link } from "react-router-dom"
+import { StatusBadge } from "../StatusBadge/StatusBadge"
+import { shortSha, timeAgo } from "../../utils/time"
 
 
+export function ProjectCard({ project, latestDeployment }) {
+    return (
+        <Link className="project-card" to={`/projects/${project.id}`}>
+            <div className="project-card-top">
+                <span className="project-card-icon" aria-hidden="true">
+                    {project.name.charAt(0).toUpperCase()}
+                </span>
+                <StatusBadge status={latestDeployment?.status} />
+            </div>
 
-export function ProjectCard({project}){
-    const navigate = useNavigate()
+            <h2>{project.name}</h2>
+            <p>{project.description || "No description"}</p>
 
-    return(
-    <div className="project-card"
-    onClick={() => navigate(`/projects/${project.id}`)}
-    >
-    <h2>{project.name}</h2>
-    <p>{project.description}</p>
-    </div>
-)}
-
-
+            <div className="project-card-footer">
+                {latestDeployment ? (
+                    <>
+                        <code>{shortSha(latestDeployment.commit_sha)}</code>
+                        <span>{timeAgo(latestDeployment.created_at)}</span>
+                    </>
+                ) : (
+                    <span>Created {timeAgo(project.created_at)}</span>
+                )}
+            </div>
+        </Link>
+    )
+}

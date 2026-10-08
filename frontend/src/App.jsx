@@ -1,16 +1,15 @@
-import {BrowserRouter, Routes, Route} from "react-router-dom"
+import {BrowserRouter, Routes, Route, Navigate} from "react-router-dom"
 import ProtectedRoute from "./components/ProtectedRoute/ProtectedRoute"
 import { SpaceBackground } from "./components/SpaceBackground/SpaceBackground"
-import { RocketCursor } from "./components/RocketCursor/RocketCursor"
+import { EngineTrail } from "./components/EngineTrail/EngineTrail"
 
 import Landing from "./pages/Landing/Landing"
 import Login from "./pages/Login/Login"
-import Register from "./pages/Register/Register"
 import Dashboard from "./pages/Dashboard/Dashboard"
 import Projects from "./pages/Project/Project"
 import ProjectDetails from "./pages/ProjectDetails/ProjectDetails"
 import DeploymentDetails from "./pages/DeploymentDetails/DeploymentDetails"
-import GitHubCallback from "./pages/GitHubCallback/GitHubCallback"
+import AuthCallback from "./pages/AuthCallback/AuthCallback"
 
 
 
@@ -18,12 +17,13 @@ function App(){
   return(
     <BrowserRouter>
     <SpaceBackground />
-    <RocketCursor />
+    <EngineTrail />
     <Routes>
       <Route path='/' element={<Landing/>}/>
-      <Route path='/register' element={<Register/>}/>
       <Route path='/login' element={<Login/>}/>
-      <Route path='/auth/github/callback' element={<GitHubCallback/>}/>
+      {/* Sign-up and sign-in are the same OAuth flow */}
+      <Route path='/register' element={<Navigate to="/login" replace/>}/>
+      <Route path='/auth/callback' element={<AuthCallback/>}/>
       <Route 
           path="/dashboard" 
           element={

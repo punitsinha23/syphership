@@ -1,31 +1,31 @@
-from pwdlib import PasswordHash
 from jose import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
+from cryptography.fernet import Fernet, InvalidToken
+import base64
+import hashlib
 import os
 from pathlib import Path
 
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
-password_hash = PasswordHash.recommended()
-
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY environment variable is not set.") 
+    raise RuntimeError("SECRET_KEY environment variable is not set.")
 
 ALGORITHM = "HS256"
 
-def hash_password(password: str) -> str:
-    return password_hash.hash(password)
+ACCESS_TOKEN_TTL = timedelta(hours=1)
+REFRESH_TOKEN_TTL = timedelta(days=7)
 
+# Fernet key derived from SECRET_KEY, used to encrypt provider tokens at rest
+_fernet = Fernet(base64.urlsafe_b64encode(hashlib.sha256(SECRET_KEY.encode()).digest()))
 
-def verify_password(password: str, hashed_password: str) -> bool:
-    return password_hash.verify(password, hashed_password)
 
 def create_token(data: dict, expire_delta: timedelta, token_type: str):
     to_encode = data.copy()
 
-    expire = datetime.utcnow() + expire_delta
+    expire = datetime.now(timezone.utc) + expire_delta
     to_encode.update({'exp': expire,
                       'type' : token_type
                       })
@@ -35,8 +35,8 @@ def create_token(data: dict, expire_delta: timedelta, token_type: str):
 def verify_token(token: str, token_type: str):
     try:
         payload = jwt.decode(
-            token, 
-            SECRET_KEY, 
+            token,
+            SECRET_KEY,
             algorithms=[ALGORITHM]
         )
 
@@ -49,3 +49,21 @@ def verify_token(token: str, token_type: str):
         return None
 
 
+def create_session_tokens(user_id: int) -> dict:
+    sub = str(user_id)
+    return {
+        "access_token": create_token({"sub": sub}, ACCESS_TOKEN_TTL, "access"),
+        "refresh_token": create_token({"sub": sub}, REFRESH_TOKEN_TTL, "refresh"),
+        "token_type": "bearer",
+    }
+
+
+def encrypt_secret(value: str) -> str:
+    return _fernet.encrypt(value.encode()).decode()
+
+
+def decrypt_secret(value: str) -> str | None:
+    try:
+        return _fernet.decrypt(value.encode()).decode()
+    except InvalidToken:
+        return None

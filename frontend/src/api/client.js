@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:8000"
+export const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
 
 
 let refreshPromise = null
@@ -31,18 +31,33 @@ async function refreshAccessToken() {
     return data.access_token
 }
 
-function logout() {
+export function saveSession({ access_token, refresh_token }) {
+    localStorage.setItem("access_token", access_token)
+    localStorage.setItem("refresh_token", refresh_token)
+}
+
+export function clearSession() {
     localStorage.removeItem("access_token")
     localStorage.removeItem("refresh_token")
+}
+
+function logout() {
+    clearSession()
     window.location.href = "/login"
 }
 
-function formatDetail(detail) {
+export function formatDetail(detail) {
     // FastAPI validation errors (422) return detail as a list of objects
     if (Array.isArray(detail)) {
         return detail.map((item) => item.msg).join(", ")
     }
     return detail
+}
+
+function requestError(message, status) {
+    const error = new Error(message)
+    error.status = status
+    return error
 }
 
 function send(path, options, token) {
@@ -69,7 +84,7 @@ export async function apiFetch(path, options = {}) {
             response = await send(path, options, newToken)
         } catch {
             logout()
-            throw new Error("Session expired. Please log in again.")
+            throw requestError("Session expired. Please log in again.", 401)
         }
     }
 
@@ -77,16 +92,16 @@ export async function apiFetch(path, options = {}) {
         let errorMessage = `Request failed with status ${response.status}`
         try {
             const errorData = await response.json()
-            errorMessage = errorData.detail || errorMessage
+            errorMessage = formatDetail(errorData.detail) || errorMessage
         } catch {
-            throw new Error(`Request failed with status ${response.status}`)
+            throw requestError(errorMessage, response.status)
         }
-        throw new Error(errorMessage)
+        throw requestError(errorMessage, response.status)
     }
 
     try {
         return await response.json()
     } catch {
-        throw new Error(`Request failed with status ${response.status}`)
+        throw requestError(`Request failed with status ${response.status}`, response.status)
     }
 }

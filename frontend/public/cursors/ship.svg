@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- Ship drawn nose-up, rotated so the nose points top-left like an arrow.
+       The nose lands at (6, 6), which is the cursor hotspot in CSS. -->
+  <g transform="rotate(-45 16 16)">
+    <!-- engine glow -->
+    <path d="M14 24 L16 28.5 L18 24 Z" fill="#22D3EE" opacity="0.7"/>
+    <!-- fins -->
+    <path d="M12.2 16.5 L7.5 23.5 L12 22.2 Z" fill="#0E7490" stroke="#070A0F" stroke-width="1" stroke-linejoin="round"/>
+    <path d="M19.8 16.5 L24.5 23.5 L20 22.2 Z" fill="#0E7490" stroke="#070A0F" stroke-width="1" stroke-linejoin="round"/>
+    <!-- hull -->
+    <path d="M16 1.5 C19.6 5.5 20.8 11.5 20.3 23.5 L11.7 23.5 C11.2 11.5 12.4 5.5 16 1.5 Z"
+          fill="#F5F7FA" stroke="#070A0F" stroke-width="1.2" stroke-linejoin="round"/>
+    <!-- hull shading -->
+    <path d="M16 3 C18.6 6.5 19.4 12 19.1 22.5 L16 22.5 Z" fill="#A7B0BB" opacity="0.35"/>
+    <!-- cockpit window -->
+    <circle cx="16" cy="10.5" r="2.2" fill="#22D3EE" stroke="#070A0F" stroke-width="0.9"/>
+  </g>
+</svg>

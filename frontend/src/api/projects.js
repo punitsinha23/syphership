@@ -1,7 +1,7 @@
 import { apiFetch } from "./client"
 
 export function getProjects() {
-    return apiFetch("/projects")
+    return apiFetch("/projects/")
 }
 
 export function getProjectDetails(project_id) {
@@ -32,6 +32,20 @@ export function createDeployment(project_id, commit_sha) {
             commit_sha: commit_sha
         })
     })
+}
+
+// Every deployment across the user's projects, newest first
+export function getAllDeployments() {
+    return apiFetch("/deployments/")
+}
+
+// Newest deployment per project id; the API returns newest first
+export function latestByProject(deployments) {
+    const latest = {}
+    for (const deployment of deployments) {
+        latest[deployment.project_id] ??= deployment
+    }
+    return latest
 }
 
 export function getDeployments(project_id) {

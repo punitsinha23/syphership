@@ -1,9 +1,12 @@
-
 import { useState, useEffect } from "react"
-import { useParams } from "react-router-dom"
+import { Link, useParams } from "react-router-dom"
 import { getProjectDetails, createDeployment, getDeployments } from "../../api/projects"
+import { getUser } from "../../api/user"
+import { connectGitHub } from "../../api/auth"
 import { generateMockSha } from "../../utils/mockCommit"
+import { formatDateTime, shortSha, timeAgo } from "../../utils/time"
 import { DeploymentCard } from "../../components/DeploymentCard/DeploymentCard"
+import { StatusBadge } from "../../components/StatusBadge/StatusBadge"
 import { Navbar } from "../../components/Navbar/Navbar"
 import "./ProjectDetails.css"
 
@@ -13,10 +16,12 @@ function ProjectDetails() {
     const [projectDetails, setProjectDetails] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
-    const [deployment, setDeployment] = useState(null)
     const [deploying, setDeploying] = useState(false)
     const [deploymentHistory, setDeploymentHistory] = useState([])
     const [historyLoading, setHistoryLoading] = useState(true)
+    // null until /auth/me answers; Google-only users must connect GitHub to deploy
+    const [githubConnected, setGithubConnected] = useState(null)
+    const [connecting, setConnecting] = useState(false)
 
     const { project_id } = useParams()
 
@@ -26,12 +31,11 @@ function ProjectDetails() {
             setError(null)
             const commitSha = generateMockSha()
 
-            const data = await createDeployment(
+            await createDeployment(
                 projectDetails.id,
                 commitSha
             )
 
-            setDeployment(data)
             await loadDeployments()
         } catch (error) {
             setError(error.message)
@@ -39,6 +43,21 @@ function ProjectDetails() {
             setDeploying(false)
         }
     }
+
+    async function handleConnectGitHub() {
+        try {
+            setConnecting(true)
+            setError(null)
+            await connectGitHub()
+        } catch (error) {
+            setError(error.message)
+            setConnecting(false)
+        }
+    }
+
+    useEffect(() => {
+        getUser().then((user) => setGithubConnected(Boolean(user?.github_connected)))
+    }, [])
 
     async function loadProjectDetails(project_id, isActive = () => true) {
         try {
@@ -65,9 +84,7 @@ function ProjectDetails() {
         const data = await getDeployments(project_id)
 
         if (isActive()) {
-            setDeploymentHistory(
-                data.filter(item => item.project_id === Number(project_id))
-            )
+            setDeploymentHistory(data)
         }
     } catch (error) {
         if (isActive()) {
@@ -89,7 +106,6 @@ function ProjectDetails() {
         setError(null)
         setProjectDetails(null)
         setDeploymentHistory([])
-        setDeployment(null)
 
         loadProjectDetails(project_id, isActive)
         loadDeployments(isActive)
@@ -101,119 +117,132 @@ function ProjectDetails() {
 
     function handleStatusUpdated(updatedDeployment){
         setDeploymentHistory((prev)=>
-            prev.map((item) => 
+            prev.map((item) =>
                 item.id === updatedDeployment.id ? updatedDeployment : item
             )
         )
-        setDeployment((prev) =>
-        prev?.id === updatedDeployment.id ? updatedDeployment : prev
-    )
     }
 
+    // The API returns deployments newest first
+    const latest = deploymentHistory[0]
+
     return (
-            <div className="project-details">
+            <div className="app-page">
                 <Navbar />
 
-                <header className="project-details-header">
-                    <div>
-                        <p className="project-details-eyebrow">
-                            PROJECT
-                        </p>
+                <main className="app-container">
+                    <nav className="breadcrumb" aria-label="Breadcrumb">
+                        <Link to="/projects">Projects</Link>
+                        <span className="breadcrumb-sep">/</span>
+                        <span>{projectDetails?.name ?? "…"}</span>
+                    </nav>
 
-                        <h1>{projectDetails?.name || "Project Details"}</h1>
+                    <header className="page-header">
+                        <div className="page-header-main">
+                            <h1 className="page-title">
+                                {projectDetails?.name || (loading ? "Loading…" : "Project")}
+                            </h1>
+                            {projectDetails && (
+                                <p className="page-subtitle">
+                                    {projectDetails.description || "No description provided."}
+                                </p>
+                            )}
+                        </div>
 
                         {projectDetails && (
-                            <p className="project-details-description">
-                                {projectDetails.description || "No description provided."}
-                            </p>
+                            <div className="page-actions">
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleSubmit}
+                                    disabled={deploying || !githubConnected}
+                                    title={githubConnected === false ? "Connect GitHub to deploy" : undefined}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <path d="M12 19V5M5 12l7-7 7 7" />
+                                    </svg>
+                                    {deploying ? "Deploying…" : "Deploy"}
+                                </button>
+                            </div>
                         )}
-                    </div>
+                    </header>
+
+                    {githubConnected === false && (
+                        <div className="alert alert-info">
+                            <span>Connect your GitHub account to deploy this project.</span>
+                            <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={handleConnectGitHub}
+                                disabled={connecting}
+                            >
+                                {connecting ? "Redirecting…" : "Connect GitHub"}
+                            </button>
+                        </div>
+                    )}
+
+                    {error && <div className="alert alert-error">{error}</div>}
+
+                    {loading && <div className="loading-state">Loading project…</div>}
 
                     {projectDetails && (
-                        <button
-                            className="project-details-deploy-button"
-                            onClick={handleSubmit}
-                            disabled={deploying}
-                        >
-                            {deploying ? "Deploying..." : "Deploy"}
-                        </button>
-                    )}
-                </header>
-
-                {loading && (
-                    <div className="project-details-state">
-                        Loading project...
-                    </div>
-                )}
-
-                {error && (
-                    <div className="project-details-error">
-                        {error}
-                    </div>
-                )}
-
-                {projectDetails && (
-                    <main className="project-details-content">
-
-                        {deployment && (
-                            <section className="project-details-current">
-                                <div>
-                                    <p className="project-details-label">
-                                        LATEST DEPLOYMENT
-                                    </p>
-
-                                    <h2>Deployment #{deployment.id}</h2>
+                        <>
+                            <section className="section card project-summary" aria-label="Production">
+                                <div className="project-summary-item">
+                                    <span className="project-summary-label">Status</span>
+                                    <StatusBadge status={latest?.status} />
                                 </div>
-
-                                <span className="project-details-status">
-                                    {deployment.status}
-                                </span>
+                                <div className="project-summary-item">
+                                    <span className="project-summary-label">Latest commit</span>
+                                    <code className="project-summary-value">
+                                        {latest ? shortSha(latest.commit_sha) : "—"}
+                                    </code>
+                                </div>
+                                <div className="project-summary-item">
+                                    <span className="project-summary-label">Last deployed</span>
+                                    <span
+                                        className="project-summary-value"
+                                        title={latest ? formatDateTime(latest.created_at) : undefined}
+                                    >
+                                        {latest ? timeAgo(latest.created_at) : "Never"}
+                                    </span>
+                                </div>
+                                <div className="project-summary-item">
+                                    <span className="project-summary-label">Created</span>
+                                    <span className="project-summary-value">
+                                        {formatDateTime(projectDetails.created_at)}
+                                    </span>
+                                </div>
                             </section>
-                        )}
 
-                        <section className="project-details-history">
-                            <div className="project-details-section-header">
-                                <div>
-                                    <p className="project-details-label">
-                                        DEPLOYMENTS
-                                    </p>
-
-                                    <h2>Deployment History</h2>
+                            <section className="section">
+                                <div className="section-header">
+                                    <h2 className="section-title">Deployments</h2>
+                                    <span className="section-meta">
+                                        {deploymentHistory.length} total
+                                    </span>
                                 </div>
 
-                                <span className="project-details-count">
-                                    {deploymentHistory.length} deployments
-                                </span>
-                            </div>
-
-                            {historyLoading ? (
-                                <div className="project-details-state">
-                                    Loading deployment history...
-                                </div>
-                            ) : deploymentHistory.length === 0 ? (
-                                <div className="project-details-empty">
-                                    <h3>No deployments yet</h3>
-
-                                    <p>
-                                        Deploy this project to create your first deployment.
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="project-details-deployments">
-                                    {deploymentHistory.map((item) => (
-                                        <DeploymentCard
-                                            key={item.id}
-                                            deployment={item}
-                                            onStatusUpdated={handleStatusUpdated}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                        </section>
-
-                    </main>
-                )}
-
+                                {historyLoading ? (
+                                    <div className="loading-state">Loading deployment history…</div>
+                                ) : deploymentHistory.length === 0 ? (
+                                    <div className="empty-state">
+                                        <h3>No deployments yet</h3>
+                                        <p>Deploy this project to create your first deployment.</p>
+                                    </div>
+                                ) : (
+                                    <ul className="card deployment-list">
+                                        {deploymentHistory.map((item) => (
+                                            <DeploymentCard
+                                                key={item.id}
+                                                deployment={item}
+                                                onStatusUpdated={handleStatusUpdated}
+                                            />
+                                        ))}
+                                    </ul>
+                                )}
+                            </section>
+                        </>
+                    )}
+                </main>
             </div>
         )
 }

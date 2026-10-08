@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { getProjects, createProject } from "../../api/projects"
+import { getProjects, createProject, getAllDeployments, latestByProject } from "../../api/projects"
 import { ProjectCard } from "../../components/ProjectCard/ProjectCard"
 import { Navbar } from "../../components/Navbar/Navbar"
 import "./Project.css"
@@ -8,14 +8,20 @@ function Projects() {
     const [name, setName] = useState("")
     const [description, setDescription] = useState("")
     const [projects, setProjects] = useState([])
+    const [latest, setLatest] = useState({})
     const [loading, setLoading] = useState(true)
+    const [creating, setCreating] = useState(false)
     const [error, setError] = useState("")
 
     useEffect(() => {
         async function loadProjects() {
             try {
-                const data = await getProjects()
-                setProjects(data)
+                const [projectData, deploymentData] = await Promise.all([
+                    getProjects(),
+                    getAllDeployments(),
+                ])
+                setProjects(projectData)
+                setLatest(latestByProject(deploymentData))
             } catch (error) {
                 setError(error.message)
             } finally {
@@ -31,79 +37,71 @@ function Projects() {
 
         try {
             setError("")
+            setCreating(true)
 
-            const data = await createProject(name, description)
+            const data = await createProject(name.trim(), description.trim())
 
+            // The API lists newest first, so keep the new project at the top
             setProjects((currentProjects) => [
-                ...currentProjects,
-                data
+                data,
+                ...currentProjects
             ])
 
             setName("")
             setDescription("")
         } catch (error) {
             setError(error.message)
+        } finally {
+            setCreating(false)
         }
     }
 
     return (
-        <div className="projects-page">
+        <div className="app-page">
             <Navbar />
 
-            <header className="projects-header">
-                <div>
-                    <p className="projects-eyebrow">
-                        PROJECTS
-                    </p>
-
-                    <h1>Your projects</h1>
-
-                    <p className="projects-subtitle">
-                        Create and manage the applications you want to deploy.
-                    </p>
-                </div>
-            </header>
-
-            <main className="projects-content">
-
-                <section className="projects-create">
-
-                    <div className="projects-section-heading">
-                        <p className="projects-label">
-                            NEW PROJECT
+            <main className="app-container">
+                <header className="page-header">
+                    <div className="page-header-main">
+                        <p className="eyebrow">Projects</p>
+                        <h1 className="page-title">Your projects</h1>
+                        <p className="page-subtitle">
+                            Create and manage the applications you want to deploy.
                         </p>
+                    </div>
+                </header>
 
-                        <h2>Create a project</h2>
+                <section className="section card projects-create">
+                    <div className="projects-create-heading">
+                        <h2 className="section-title">New project</h2>
+                        <p>Give it a name; you can deploy it right after.</p>
                     </div>
 
                     <form
                         className="projects-form"
                         onSubmit={handleSubmit}
                     >
-                        <div className="projects-field">
-                            <label htmlFor="project-name">
-                                Name
-                            </label>
-
+                        <label className="field">
+                            <span className="field-label">Name</span>
                             <input
-                                id="project-name"
+                                className="input"
                                 type="text"
                                 value={name}
                                 onChange={(event) =>
                                     setName(event.target.value)
                                 }
                                 placeholder="my-project"
+                                maxLength={100}
                                 required
                             />
-                        </div>
+                        </label>
 
-                        <div className="projects-field">
-                            <label htmlFor="project-description">
-                                Description
-                            </label>
-
+                        <label className="field">
+                            <span className="field-label">
+                                Description <span className="field-optional">optional</span>
+                            </span>
                             <input
-                                id="project-description"
+                                className="input"
                                 type="text"
                                 value={description}
                                 onChange={(event) =>
@@ -111,51 +109,38 @@ function Projects() {
                                 }
                                 placeholder="A short description"
                             />
-                        </div>
+                        </label>
 
                         <button
-                            className="projects-create-button"
+                            className="btn btn-primary projects-create-button"
                             type="submit"
+                            disabled={creating || !name.trim()}
                         >
-                            Create Project
+                            {creating ? "Creating…" : "Create Project"}
                         </button>
                     </form>
 
                     {error && (
-                        <p className="projects-error">
+                        <div className="alert alert-error projects-error">
                             {error}
-                        </p>
+                        </div>
                     )}
-
                 </section>
 
-                <section className="projects-list">
-
-                    <div className="projects-section-header">
-                        <div>
-                            <p className="projects-label">
-                                YOUR PROJECTS
-                            </p>
-
-                            <h2>Projects</h2>
-                        </div>
-
-                        <span className="projects-count">
-                            {projects.length} projects
+                <section className="section">
+                    <div className="section-header">
+                        <h2 className="section-title">All projects</h2>
+                        <span className="section-meta">
+                            {projects.length} {projects.length === 1 ? "project" : "projects"}
                         </span>
                     </div>
 
                     {loading ? (
-                        <div className="projects-state">
-                            Loading projects...
-                        </div>
+                        <div className="loading-state">Loading projects…</div>
                     ) : projects.length === 0 ? (
-                        <div className="projects-empty">
+                        <div className="empty-state">
                             <h3>No projects yet</h3>
-
-                            <p>
-                                Create your first project to start shipping.
-                            </p>
+                            <p>Create your first project above to start shipping.</p>
                         </div>
                     ) : (
                         <div className="projects-grid">
@@ -163,13 +148,12 @@ function Projects() {
                                 <ProjectCard
                                     key={project.id}
                                     project={project}
+                                    latestDeployment={latest[project.id]}
                                 />
                             ))}
                         </div>
                     )}
-
                 </section>
-
             </main>
         </div>
     )

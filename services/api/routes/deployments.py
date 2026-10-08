@@ -55,7 +55,7 @@ def get_deployments(
     if project_id is not None:
         query = query.filter(Deployment.project_id == project_id)
 
-    return query.all()
+    return query.order_by(Deployment.created_at.desc(), Deployment.id.desc()).all()
 
 
 @router.get("/{deployment_id}", response_model=DeploymentResponse)

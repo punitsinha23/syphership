@@ -168,7 +168,7 @@ def test_failed_status_requires_failure_reason(client, auth_headers):
 
     assert response.status_code == 422
 
-def test_other_user_cannot_access_deployment(client, auth_headers):
+def test_other_user_cannot_access_deployment(client, auth_headers, user2_headers):
     # User 1 creates a project
     project_response = client.post(
         "/projects/",
@@ -194,26 +194,6 @@ def test_other_user_cannot_access_deployment(client, auth_headers):
     deployment_id = deployment_response.json()["id"]
 
     # Create user 2
-    client.post(
-        "/auth/register",
-        json={
-            "email": "user2@example.com",
-            "username": "user2",
-            "password": "password123"
-        }
-    )
-
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "user2@example.com",
-            "password": "password123"
-        }
-    )
-
-    user2_headers = {
-        "Authorization": f"Bearer {login_response.json()['access_token']}"
-    }
 
     # User 2 tries to access User 1's deployment
     response = client.get(
@@ -257,7 +237,8 @@ def test_get_deployments(client, auth_headers):
 
 def test_other_user_cannot_create_deployment_for_project(
     client,
-    auth_headers
+    auth_headers,
+    user2_headers
 ):
     # User 1 creates a project
     project_response = client.post(
@@ -272,26 +253,6 @@ def test_other_user_cannot_create_deployment_for_project(
     project_id = project_response.json()["id"]
 
     # Create user 2
-    client.post(
-        "/auth/register",
-        json={
-            "email": "user2@example.com",
-            "username": "user2",
-            "password": "password123"
-        }
-    )
-
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "user2@example.com",
-            "password": "password123"
-        }
-    )
-
-    user2_headers = {
-        "Authorization": f"Bearer {login_response.json()['access_token']}"
-    }
 
     response = client.post(
         "/deployments/",
@@ -307,7 +268,8 @@ def test_other_user_cannot_create_deployment_for_project(
 
 def test_other_user_cannot_update_deployment(
     client,
-    auth_headers
+    auth_headers,
+    user2_headers
 ):
     # User 1 creates project
     project_response = client.post(
@@ -333,26 +295,6 @@ def test_other_user_cannot_update_deployment(
     deployment_id = deployment_response.json()["id"]
 
     
-    client.post(
-        "/auth/register",
-        json={
-            "email": "user2@example.com",
-            "username": "user2",
-            "password": "password123"
-        }
-    )
-
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "user2@example.com",
-            "password": "password123"
-        }
-    )
-
-    user2_headers = {
-        "Authorization": f"Bearer {login_response.json()['access_token']}"
-    }
 
 
     response = client.patch(

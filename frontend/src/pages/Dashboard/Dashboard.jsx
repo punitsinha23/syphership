@@ -1,139 +1,139 @@
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
-import { getProjects } from "../../api/projects"
-import { getUser } from "../../api/user"
+import { Link } from "react-router-dom"
+import { getProjects, getAllDeployments, latestByProject } from "../../api/projects"
 import { ProjectCard } from "../../components/ProjectCard/ProjectCard"
+import { StatusBadge } from "../../components/StatusBadge/StatusBadge"
 import { Navbar } from "../../components/Navbar/Navbar"
+import { shortSha, timeAgo, formatDateTime } from "../../utils/time"
 import "./Dashboard.css"
 
+const RECENT_LIMIT = 6
+
 function Dashboard() {
-    const [user, setUser] = useState(null)
     const [projects, setProjects] = useState([])
+    const [deployments, setDeployments] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState("")
 
-    const navigate = useNavigate()
-
     useEffect(() => {
-        async function loadDashboard() {
-            try {
-                const userData = await getUser()
+        Promise.all([getProjects(), getAllDeployments()])
+            .then(([projectData, deploymentData]) => {
+                setProjects(projectData)
+                setDeployments(deploymentData)
+            })
+            .catch((error) => setError(error.message))
+            .finally(() => setLoading(false))
+    }, [])
 
-                if (!userData) {
-                    navigate("/login")
-                    return
-                }
+    const latest = latestByProject(deployments)
+    const latestStatuses = Object.values(latest).map((deployment) => deployment.status)
+    const projectNames = Object.fromEntries(projects.map((project) => [project.id, project.name]))
 
-                setUser(userData)
-
-                const data = await getProjects()
-                setProjects(data)
-
-            } catch (error) {
-                console.log(error)
-                setError(error.message)
-            } finally {
-                setLoading(false)
-            }
-        }
-
-        loadDashboard()
-    }, [navigate])
-
-    if (loading) {
-        return (
-            <div className="dashboard-state">
-                <p>Loading dashboard...</p>
-            </div>
-        )
-    }
-
-    if (error) {
-        return (
-            <div className="dashboard-state dashboard-error">
-                <p>{error}</p>
-            </div>
-        )
-    }
+    const stats = [
+        { label: "Projects", value: projects.length },
+        { label: "Deployments", value: deployments.length },
+        { label: "Running", value: latestStatuses.filter((s) => s === "RUNNING").length, tone: "running" },
+        { label: "Failing", value: latestStatuses.filter((s) => s === "FAILED").length, tone: "failed" },
+    ]
 
     return (
-        <div className="dashboard">
+        <div className="app-page">
             <Navbar />
 
-            <main className="dashboard-main">
-
-                <header className="dashboard-header">
-                    <div>
-                        <p className="dashboard-eyebrow">
-                            CONTROL CENTER
-                        </p>
-
-                        <h1>Dashboard</h1>
-
-                        <p className="dashboard-subtitle">
-                            Manage your projects and deployments.
+            <main className="app-container">
+                <header className="page-header">
+                    <div className="page-header-main">
+                        <p className="eyebrow">Overview</p>
+                        <h1 className="page-title">Dashboard</h1>
+                        <p className="page-subtitle">
+                            Your projects and their latest deployments at a glance.
                         </p>
                     </div>
 
-                    <button
-                        className="dashboard-primary-button"
-                        onClick={() => navigate("/projects")}
-                    >
-                        <span>+</span>
-                        New Project
-                    </button>
+                    <div className="page-actions">
+                        <Link className="btn btn-primary" to="/projects">
+                            <span aria-hidden="true">+</span>
+                            New Project
+                        </Link>
+                    </div>
                 </header>
 
-                <section className="dashboard-content">
+                {error && <div className="alert alert-error">{error}</div>}
 
-                    <div className="dashboard-section-header">
-                        <div>
-                            <p className="dashboard-section-label">
-                                PROJECTS
-                            </p>
+                {loading ? (
+                    <div className="loading-state">Loading dashboard…</div>
+                ) : (
+                    <>
+                        <section className="section stat-grid" aria-label="Summary">
+                            {stats.map((stat) => (
+                                <div className="stat" key={stat.label}>
+                                    <p className="stat-label">{stat.label}</p>
+                                    <p className={`stat-value ${stat.value && stat.tone ? `stat-value-${stat.tone}` : ""}`}>
+                                        {stat.value}
+                                    </p>
+                                </div>
+                            ))}
+                        </section>
 
-                            <h2>Your projects</h2>
-                        </div>
-
-                        <span className="dashboard-project-count">
-                            {projects.length} projects
-                        </span>
-                    </div>
-
-                    {projects.length === 0 ? (
-                        <div className="dashboard-empty">
-                            <div className="dashboard-empty-orbit">
-                                <span />
+                        <section className="section">
+                            <div className="section-header">
+                                <h2 className="section-title">Projects</h2>
+                                <Link className="dashboard-link" to="/projects">View all →</Link>
                             </div>
 
-                            <h3>No projects yet</h3>
+                            {projects.length === 0 ? (
+                                <div className="empty-state">
+                                    <div className="dashboard-empty-orbit" aria-hidden="true"><span /></div>
+                                    <h3>No projects yet</h3>
+                                    <p>Create your first project and ship it into orbit.</p>
+                                    <Link className="btn btn-primary" to="/projects">Create Project</Link>
+                                </div>
+                            ) : (
+                                <div className="dashboard-projects">
+                                    {projects.map((project) => (
+                                        <ProjectCard
+                                            key={project.id}
+                                            project={project}
+                                            latestDeployment={latest[project.id]}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </section>
 
-                            <p>
-                                Create your first project and start shipping.
-                            </p>
+                        {deployments.length > 0 && (
+                            <section className="section">
+                                <div className="section-header">
+                                    <h2 className="section-title">Recent deployments</h2>
+                                    <span className="section-meta">
+                                        last {Math.min(RECENT_LIMIT, deployments.length)}
+                                    </span>
+                                </div>
 
-                            <button
-                                className="dashboard-primary-button"
-                                onClick={() => navigate("/projects")}
-                            >
-                                Create Project
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="dashboard-projects">
-                            {projects.map((project) => (
-                                <ProjectCard
-                                    key={project.id}
-                                    project={project}
-                                />
-                            ))}
-                        </div>
-                    )}
-
-                </section>
-
+                                <ul className="card activity-list">
+                                    {deployments.slice(0, RECENT_LIMIT).map((deployment) => (
+                                        <li key={deployment.id}>
+                                            <Link className="activity-row" to={`/deployments/${deployment.id}`}>
+                                                <StatusBadge status={deployment.status} />
+                                                <span className="activity-project">
+                                                    {projectNames[deployment.project_id] ?? `Project #${deployment.project_id}`}
+                                                </span>
+                                                <code className="activity-sha">{shortSha(deployment.commit_sha)}</code>
+                                                <time
+                                                    className="activity-time"
+                                                    title={formatDateTime(deployment.created_at)}
+                                                >
+                                                    {timeAgo(deployment.created_at)}
+                                                </time>
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </section>
+                        )}
+                    </>
+                )}
             </main>
-
         </div>
     )
 }

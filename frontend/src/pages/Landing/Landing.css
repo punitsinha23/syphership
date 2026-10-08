@@ -1,147 +1,265 @@
 .landing-page {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+/* ================================
+   Nav
+   ================================ */
+
+.landing-nav {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background:
-    radial-gradient(
-      circle at 50% 30%,
-      rgba(34, 211, 238, 0.04),
-      transparent 50%
-    ),
-    var(--color-bg);
-}
-
-.landing-container {
-  width: 100%;
-  max-width: 420px;
-  text-align: center;
-}
-
-.landing-header {
-  margin-bottom: 40px;
+  justify-content: space-between;
+  padding: 24px 0;
 }
 
 .landing-logo {
   font-family: var(--font-mono);
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--color-text-primary);
-  margin-bottom: 24px;
 }
 
 .landing-logo-accent {
   color: var(--color-accent);
 }
 
+/* ================================
+   Hero
+   ================================ */
+
+.landing-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 48px;
+  padding: 72px 0 88px;
+}
+
 .landing-title {
-  font-size: 36px;
+  margin-bottom: 20px;
+  font-size: clamp(42px, 5.6vw, 68px);
   font-weight: 700;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
-  margin-bottom: 16px;
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+}
+
+.landing-title-accent {
+  color: var(--color-accent);
 }
 
 .landing-subtitle {
+  max-width: 440px;
+  margin-bottom: 36px;
   color: var(--color-text-secondary);
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1.6;
 }
 
-.landing-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.landing-auth {
+  max-width: 360px;
 }
 
-.landing-button {
+.landing-auth .oauth-note {
+  text-align: left;
+}
+
+.landing-hero-visual {
+  display: flex;
+  justify-content: center;
+}
+
+/* ================================
+   Orbit visual
+   ================================ */
+
+.landing-orbit {
   width: 100%;
-  height: 48px;
-  border-radius: var(--radius-sm);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    box-shadow var(--transition-fast),
-    transform var(--transition-fast),
-    border-color var(--transition-fast);
+  max-width: 460px;
+  height: auto;
+  overflow: visible;
 }
 
-.landing-button-primary {
-  border: 1px solid var(--color-accent);
+.orbit-ring {
+  fill: none;
+  stroke: rgba(34, 211, 238, 0.28);
+  stroke-width: 1;
+}
+
+.orbit-ring-faint {
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+.orbit-marker {
+  fill: var(--color-bg);
+  stroke: rgba(34, 211, 238, 0.6);
+  stroke-width: 1;
+}
+
+.orbit-point {
+  fill: var(--color-accent);
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.9));
+}
+
+.orbit-core {
+  fill: var(--color-text-primary);
+  filter: drop-shadow(0 0 10px rgba(103, 232, 249, 0.7));
+}
+
+.orbit-label {
+  fill: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+/* ================================
+   Lifecycle
+   ================================ */
+
+.landing-lifecycle {
+  padding: 40px 0 72px;
+  border-top: 1px solid var(--color-border);
+}
+
+.lifecycle-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  margin: 28px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lifecycle-step {
+  position: relative;
+  padding-top: 28px;
+}
+
+/* Thin connector running through the step dots */
+.lifecycle-step::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 14px;
+  right: -32px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.5), rgba(34, 211, 238, 0.08));
+}
+
+.lifecycle-step:last-child::before {
+  right: 0;
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.5), transparent);
+}
+
+.lifecycle-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
   background: var(--color-accent);
-  color: #061014;
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.6);
 }
 
-.landing-button-primary:hover {
-  background: var(--color-accent-hover);
-  box-shadow: var(--shadow-glow);
-  transform: translateY(-1px);
+.lifecycle-index {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
 }
 
-.landing-button-secondary {
-  border: 1px solid var(--color-border);
-  background: transparent;
-  color: var(--color-text-primary);
+.lifecycle-step h2 {
+  margin: 6px 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
-.landing-button-secondary:hover {
-  border-color: var(--color-border-hover);
-  background: rgba(255, 255, 255, 0.03);
+.lifecycle-step p {
+  max-width: 280px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
-.landing-divider {
+/* ================================
+   Footer
+   ================================ */
+
+.landing-footer {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  margin: 8px 0;
+  justify-content: space-between;
+  margin-top: auto;
+  padding: 24px 0 28px;
+  border-top: 1px solid var(--color-border);
   color: var(--color-text-muted);
   font-size: 12px;
 }
 
-.landing-divider::before,
-.landing-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--color-border);
-}
+/* ================================
+   Responsive
+   ================================ */
 
-.landing-oauth {
-  display: flex;
-  gap: 12px;
-}
-
-.landing-oauth-button {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  height: 44px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-primary);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast);
-}
-
-.landing-oauth-button:hover {
-  border-color: var(--color-border-hover);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .landing-button,
-  .landing-oauth-button {
-    transition: none;
+@media (max-width: 900px) {
+  .landing-hero {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 40px 0 56px;
   }
+
+  .landing-hero-visual {
+    order: -1;
+  }
+
+  .landing-orbit {
+    max-width: 300px;
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-page {
+    padding: 0 16px;
+  }
+
+  .landing-auth {
+    max-width: none;
+  }
+
+  .lifecycle-steps {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .lifecycle-step {
+    padding: 0 0 0 28px;
+  }
+
+  .lifecycle-step::before {
+    top: 14px;
+    bottom: -24px;
+    left: 4px;
+    right: auto;
+    width: 1px;
+    height: auto;
+    background: rgba(34, 211, 238, 0.3);
+  }
+
+  .lifecycle-step:last-child::before {
+    display: none;
+  }
+}
+
+/* The hero has its own orbit; hide the app background's decorative rings here */
+body:has(.landing-page) .space-orbit {
+  display: none;
 }

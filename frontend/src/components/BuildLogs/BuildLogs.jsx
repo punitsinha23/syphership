@@ -4,13 +4,14 @@ export default function BuildLogs({ logs = [] }) {
   return (
     <div className="build-logs">
       <div className="build-logs-header">
-        <h3>Build Logs</h3>
-        <span>{logs.length} lines</span>
+        <h3>Build output</h3>
+        <span>{logs.length} {logs.length === 1 ? "line" : "lines"}</span>
       </div>
 
       {logs.length === 0 ? (
         <div className="build-logs-empty">
-          No build logs available yet.
+          <span className="build-logs-prompt">$</span>
+          No build output yet. Logs will stream here once builds run.
         </div>
       ) : (
         <div className="build-logs-content">

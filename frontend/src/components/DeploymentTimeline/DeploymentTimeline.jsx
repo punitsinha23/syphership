@@ -1,56 +1,58 @@
-import Timeline from "@mui/lab/Timeline";
-import TimelineItem from "@mui/lab/TimelineItem";
-import TimelineSeparator from "@mui/lab/TimelineSeparator";
-import TimelineConnector from "@mui/lab/TimelineConnector";
-import TimelineContent from "@mui/lab/TimelineContent";
-import TimelineDot from "@mui/lab/TimelineDot";
+import "./DeploymentTimeline.css"
 
-const stages = ["QUEUED", "BUILDING", "DEPLOYING", "RUNNING"];
+const stages = [
+    { key: "QUEUED", label: "Queued", hint: "Waiting for a builder" },
+    { key: "BUILDING", label: "Build", hint: "Compiling the application" },
+    { key: "DEPLOYING", label: "Deploy", hint: "Shipping to production" },
+    { key: "RUNNING", label: "Run", hint: "Serving traffic" },
+];
+
+function stepState(index, currentIndex, status) {
+  if (status === "RUNNING" || index < currentIndex) return "done";
+  if (index === currentIndex) return "active";
+  return "pending";
+}
 
 export default function DeploymentTimeline({ status }) {
-  const currentIndex = stages.indexOf(status);
   const isFailed = status === "FAILED";
+  const currentIndex = stages.findIndex((stage) => stage.key === status);
 
   return (
-    <Timeline position="alternate">
+    <ol className={`pipeline ${isFailed ? "pipeline-failed" : ""}`}>
       {stages.map((stage, index) => {
-        const completed = index < currentIndex;
-        const active = index === currentIndex;
+        // The API doesn't record which stage a failed deployment reached
+        const state = isFailed ? "unknown" : stepState(index, currentIndex, status);
 
         return (
-          <TimelineItem key={stage}>
-            <TimelineSeparator>
-              <TimelineDot
-                color={completed || active ? "success" : "grey"}
-                variant={active ? "filled" : "outlined"}
-              />
-
-              {index < stages.length - 1 && (
-                <TimelineConnector
-                  sx={{
-                    bgcolor: completed ? "success.main" : "grey.400",
-                  }}
-                />
+          <li key={stage.key} className={`pipeline-step pipeline-step-${state}`}>
+            <span className="pipeline-node" aria-hidden="true">
+              {state === "done" && (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12l5 5 9-10" />
+                </svg>
               )}
-            </TimelineSeparator>
-
-            <TimelineContent>{stage}</TimelineContent>
-          </TimelineItem>
+            </span>
+            <span className="pipeline-index">0{index + 1}</span>
+            <span className="pipeline-label">{stage.label}</span>
+            <span className="pipeline-hint">
+              {state === "active" ? "In progress" : stage.hint}
+            </span>
+          </li>
         );
       })}
 
       {isFailed && (
-        <TimelineItem>
-          <TimelineSeparator>
-            <TimelineDot color="error" variant="filled" />
-          </TimelineSeparator>
-
-          <TimelineContent>
-            <strong>FAILED</strong>
-          </TimelineContent>
-        </TimelineItem>
+        <li className="pipeline-step pipeline-step-error">
+          <span className="pipeline-node" aria-hidden="true">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </span>
+          <span className="pipeline-index">ERR</span>
+          <span className="pipeline-label">Failed</span>
+          <span className="pipeline-hint">Deployment stopped</span>
+        </li>
       )}
-    </Timeline>
+    </ol>
   );
 }
-
