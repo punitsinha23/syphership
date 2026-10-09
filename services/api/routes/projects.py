@@ -5,6 +5,7 @@ from database import get_db
 from models.user import User
 from models.project import Project
 from schemas.project import ProjectCreate, ProjectResponse
+from github.service import fetch_repo_config, get_github_token
 
 
 router = APIRouter(prefix='/projects')
@@ -13,12 +14,19 @@ router = APIRouter(prefix='/projects')
 
 @router.post("/", response_model=ProjectResponse)
 def create_projects(project: ProjectCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    repo_fields = {}
 
+    if project.repo_full_name:
+        token = get_github_token(db, user)
+        repo_fields = fetch_repo_config(token, project.repo_full_name, project.repo_branch)
+    elif project.repo_branch:
+        raise HTTPException(status_code=422, detail="repo_branch requires repo_full_name")
 
     new_project = Project(
         name = project.name,
         description = project.description,
-        user_id = user.id
+        user_id = user.id,
+        **repo_fields
     )
 
     db.add(new_project)
@@ -56,6 +64,16 @@ def update_project(project_id: int, project: ProjectCreate, db: Session = Depend
 
     db_project.name = project.name
     db_project.description = project.description
+
+    # Omitted repo fields keep the current repo; a branch alone switches branch on it
+    if project.repo_full_name or project.repo_branch:
+        full_name = project.repo_full_name or db_project.repo_full_name
+        if not full_name:
+            raise HTTPException(status_code=422, detail="repo_branch requires repo_full_name")
+
+        token = get_github_token(db, user)
+        for field, value in fetch_repo_config(token, full_name, project.repo_branch).items():
+            setattr(db_project, field, value)
 
     db.commit()
     db.refresh(db_project)

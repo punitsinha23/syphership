@@ -1,14 +1,15 @@
 import os
-from urllib.parse import urlencode
-
+import re
+from urllib.parse import quote, urlencode
+from auth.security import decrypt_secret
+from models.user import OAuthAccount
+from fastapi import HTTPException
 import httpx
 
 from auth.oauth import OAuthError
 
 
-# Sign-in only needs identity + email. Add repo access (ideally via a GitHub App)
-# when deployments start pulling code.
-SCOPES = "read:user user:email"
+SCOPES = "read:user user:email repo"
 
 
 def _config():
@@ -90,4 +91,54 @@ def fetch_github_identity(code: str) -> dict:
         "username_hint": github_user.get("login"),
         "avatar_url": github_user.get("avatar_url"),
         "access_token": access_token,
+    }
+
+def get_github_token(db, user) -> str:
+    account = db.query(OAuthAccount).filter(
+        OAuthAccount.user_id == user.id,
+        OAuthAccount.provider == "github",
+    ).first()
+
+    token = decrypt_secret(account.access_token) if account and account.access_token else None
+    if not token:
+        raise HTTPException(status_code=403, detail="Connect your Github account first.")
+    return token
+
+
+def github_get(path: str, token: str, params: dict | None = None):
+    response = httpx.get(
+        f"https://api.github.com{path}",
+        params=params,
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+        timeout=10,
+    )
+    if response.status_code == 401:
+        raise HTTPException(status_code=403, detail="Github access was revoked. Reconnect Github.")
+    if response.status_code == 404:
+        raise HTTPException(status_code=404, detail="Respository or branch not found, or no access.")
+    response.raise_for_status()
+    return response.json()
+
+
+REPO_FULL_NAME = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+
+
+def fetch_repo_config(token: str, full_name: str, branch: str | None = None) -> dict:
+    """Check the user can access the repo and branch on GitHub; return the
+    Project repo_* fields. The branch defaults to the repo's default branch."""
+    if not REPO_FULL_NAME.match(full_name) or any(part in (".", "..") for part in full_name.split("/")):
+        raise HTTPException(status_code=422, detail="Repository must look like 'owner/name'.")
+
+    repo = github_get(f"/repos/{full_name}", token)
+    branch = branch or repo["default_branch"]
+    # Branch names may contain "/", so encode it as one path segment
+    github_get(f"/repos/{repo['full_name']}/branches/{quote(branch, safe='')}", token)
+
+    return {
+        "repo_id": repo["id"],
+        "repo_full_name": repo["full_name"],
+        "repo_branch": branch,
+        "repo_clone_url": repo["clone_url"],
+        "repo_html_url": repo["html_url"],
+        "repo_private": repo["private"],
     }
