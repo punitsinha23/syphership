@@ -15,6 +15,12 @@ export function ProjectCard({ project, latestDeployment }) {
             </div>
 
             <h2>{project.name}</h2>
+            {project.repo_full_name && (
+                <span className="project-card-repo">
+                    {project.repo_full_name}
+                    <span className="project-card-branch">{project.repo_branch}</span>
+                </span>
+            )}
             <p>{project.description || "No description"}</p>
 
             <div className="project-card-footer">

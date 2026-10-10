@@ -7,6 +7,7 @@ from models.project import Project
 from schemas.deployment import DeploymentCreate, DeploymentResponse, DeploymentStatusUpdate
 from auth.dependencies import get_current_user
 from services.deployment_services import update_deployment_status
+from github.service import get_github_token, fetch_latest_commit
 
 
 router = APIRouter(prefix="/deployments")
@@ -29,9 +30,16 @@ def create_deployment(
             detail="Project not found."
         )
 
+    if not project.repo_full_name or not project.repo_branch:
+        raise HTTPException(status_code=400, 
+        detail="This project has no linked Github repository or branch.")
+
+    token = get_github_token(db, user)
+    commit_sha = fetch_latest_commit(token, project.repo_full_name, project.repo_branch)
+    
     new_deployment = Deployment(
         project_id=project.id,
-        commit_sha=deployment.commit_sha,
+        commit_sha=commit_sha,
         status=DeploymentStatus.QUEUED
     )
 

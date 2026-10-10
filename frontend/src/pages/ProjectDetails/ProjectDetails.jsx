@@ -205,11 +205,29 @@ function ProjectDetails() {
                                         {latest ? timeAgo(latest.created_at) : "Never"}
                                     </span>
                                 </div>
+                                <div className="project-summary-item project-summary-item-wide">
+                                    <span className="project-summary-label">Repository</span>
+                                    {projectDetails.repo_full_name ? (
+                                        <a
+                                            className="project-summary-value project-summary-repo"
+                                            href={projectDetails.repo_html_url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                        >
+                                            {projectDetails.repo_full_name}
+                                            {projectDetails.repo_private && <span className="project-summary-badge">Private</span>}
+                                        </a>
+                                    ) : (
+                                        <span className="project-summary-value project-summary-muted">Not connected</span>
+                                    )}
+                                </div>
                                 <div className="project-summary-item">
-                                    <span className="project-summary-label">Created</span>
-                                    <span className="project-summary-value">
-                                        {formatDateTime(projectDetails.created_at)}
-                                    </span>
+                                    <span className="project-summary-label">Branch</span>
+                                    {projectDetails.repo_branch ? (
+                                        <code className="project-summary-value">{projectDetails.repo_branch}</code>
+                                    ) : (
+                                        <span className="project-summary-value project-summary-muted">—</span>
+                                    )}
                                 </div>
                             </section>
 

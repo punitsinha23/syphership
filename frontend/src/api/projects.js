@@ -8,7 +8,8 @@ export function getProjectDetails(project_id) {
     return apiFetch(`/projects/${project_id}`)
 }
 
-export function createProject(name, description) {
+
+export function createProject(name, description, repoFullName = null, repoBranch = null) {
     return apiFetch("/projects/", {
         method: "POST",
         headers: {
@@ -16,7 +17,9 @@ export function createProject(name, description) {
         },
         body: JSON.stringify({
             name: name,
-            description: description
+            description: description,
+            repo_full_name: repoFullName,
+            repo_branch: repoBranch
         })
     })
 }
@@ -34,12 +37,12 @@ export function createDeployment(project_id, commit_sha) {
     })
 }
 
-// Every deployment across the user's projects, newest first
+
 export function getAllDeployments() {
     return apiFetch("/deployments/")
 }
 
-// Newest deployment per project id; the API returns newest first
+
 export function latestByProject(deployments) {
     const latest = {}
     for (const deployment of deployments) {

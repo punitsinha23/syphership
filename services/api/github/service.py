@@ -124,8 +124,6 @@ REPO_FULL_NAME = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
 def fetch_repo_config(token: str, full_name: str, branch: str | None = None) -> dict:
-    """Check the user can access the repo and branch on GitHub; return the
-    Project repo_* fields. The branch defaults to the repo's default branch."""
     if not REPO_FULL_NAME.match(full_name) or any(part in (".", "..") for part in full_name.split("/")):
         raise HTTPException(status_code=422, detail="Repository must look like 'owner/name'.")
 
@@ -142,3 +140,21 @@ def fetch_repo_config(token: str, full_name: str, branch: str | None = None) -> 
         "repo_html_url": repo["html_url"],
         "repo_private": repo["private"],
     }
+
+
+def fetch_latest_commit(token, full_name, branch):
+    commits = github_get(
+        f"/repos/{full_name}/commits",
+        token,
+        params={'sha': branch, "per_page": 1}
+    )
+
+    if not commits:
+        raise HTTPException(
+            status_code=404,
+            detail="No commits found for this branch."
+        )
+
+    latest_commit = commits[0]["sha"]
+    return latest_commit
+    

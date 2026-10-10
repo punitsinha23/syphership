@@ -19,10 +19,8 @@
   gap: 14px;
 }
 
-.field-optional {
-  margin-left: 4px;
-  color: var(--color-text-muted);
-  font-weight: 400;
+.projects-form-with-branch {
+  grid-template-columns: minmax(160px, 1fr) minmax(200px, 1.6fr) minmax(140px, 0.9fr) auto;
 }
 
 .projects-create-button {
@@ -40,7 +38,8 @@
 }
 
 @media (max-width: 800px) {
-  .projects-form {
+  .projects-form,
+  .projects-form-with-branch {
     grid-template-columns: 1fr;
   }
 }

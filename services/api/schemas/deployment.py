@@ -4,7 +4,7 @@ from datetime import datetime
 
 class DeploymentCreate(BaseModel):
     project_id: int
-    commit_sha: str
+    
 
 class DeploymentResponse(BaseModel):
     id: int

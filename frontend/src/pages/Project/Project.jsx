@@ -1,17 +1,26 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { getProjects, createProject, getAllDeployments, latestByProject } from "../../api/projects"
+import { getBranches } from "../../api/github"
 import { ProjectCard } from "../../components/ProjectCard/ProjectCard"
+import { RepoPicker } from "../../components/RepoPicker/RepoPicker"
 import { Navbar } from "../../components/Navbar/Navbar"
 import "./Project.css"
 
 function Projects() {
     const [name, setName] = useState("")
+    const [nameEdited, setNameEdited] = useState(false)
     const [description, setDescription] = useState("")
     const [projects, setProjects] = useState([])
     const [latest, setLatest] = useState({})
     const [loading, setLoading] = useState(true)
     const [creating, setCreating] = useState(false)
     const [error, setError] = useState("")
+
+    const [selectedRepo, setSelectedRepo] = useState(null)
+    const [branches, setBranches] = useState([])
+    const [branch, setBranch] = useState("")
+    const [branchesLoading, setBranchesLoading] = useState(false)
+    const pendingRepo = useRef(null)
 
     useEffect(() => {
         async function loadProjects() {
@@ -32,6 +41,26 @@ function Projects() {
         loadProjects()
     }, [])
 
+    async function handleSelectRepo(repo) {
+        setSelectedRepo(repo)
+        setBranches([])
+        setBranch(repo?.default_branch ?? "")
+        if (!nameEdited) setName(repo?.name ?? "")
+
+        pendingRepo.current = repo?.full_name ?? null
+        if (!repo) return
+
+        setBranchesLoading(true)
+        try {
+            const data = await getBranches(repo.full_name)
+            if (pendingRepo.current === repo.full_name) setBranches(data)
+        } catch (error) {
+            if (pendingRepo.current === repo.full_name) setError(error.message)
+        } finally {
+            if (pendingRepo.current === repo.full_name) setBranchesLoading(false)
+        }
+    }
+
     async function handleSubmit(event) {
         event.preventDefault()
 
@@ -39,7 +68,12 @@ function Projects() {
             setError("")
             setCreating(true)
 
-            const data = await createProject(name.trim(), description.trim())
+            const data = await createProject(
+                name.trim(),
+                description.trim(),
+                selectedRepo?.full_name ?? null,
+                selectedRepo ? branch : null
+            )
 
             // The API lists newest first, so keep the new project at the top
             setProjects((currentProjects) => [
@@ -48,13 +82,18 @@ function Projects() {
             ])
 
             setName("")
+            setNameEdited(false)
             setDescription("")
+            handleSelectRepo(null)
         } catch (error) {
             setError(error.message)
         } finally {
             setCreating(false)
         }
     }
+
+
+    const branchOptions = branches.length > 0 ? branches : branch ? [branch] : []
 
     return (
         <div className="app-page">
@@ -74,11 +113,13 @@ function Projects() {
                 <section className="section card projects-create">
                     <div className="projects-create-heading">
                         <h2 className="section-title">New project</h2>
-                        <p>Give it a name; you can deploy it right after.</p>
+                        <p>Import a GitHub repository, or start with just a name.</p>
                     </div>
 
+                    <RepoPicker selected={selectedRepo} onSelect={handleSelectRepo} />
+
                     <form
-                        className="projects-form"
+                        className={`projects-form ${selectedRepo ? "projects-form-with-branch" : ""}`}
                         onSubmit={handleSubmit}
                     >
                         <label className="field">
@@ -87,9 +128,10 @@ function Projects() {
                                 className="input"
                                 type="text"
                                 value={name}
-                                onChange={(event) =>
+                                onChange={(event) => {
                                     setName(event.target.value)
-                                }
+                                    setNameEdited(event.target.value !== "")
+                                }}
                                 placeholder="my-project"
                                 maxLength={100}
                                 required
@@ -111,10 +153,29 @@ function Projects() {
                             />
                         </label>
 
+                        {selectedRepo && (
+                            <label className="field">
+                                <span className="field-label">Branch</span>
+                                <select
+                                    className="input"
+                                    value={branch}
+                                    onChange={(event) => setBranch(event.target.value)}
+                                    disabled={branchesLoading}
+                                >
+                                    {branchOptions.map((branchName) => (
+                                        <option key={branchName} value={branchName}>
+                                            {branchName}
+                                            {branchName === selectedRepo.default_branch ? " (default)" : ""}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        )}
+
                         <button
                             className="btn btn-primary projects-create-button"
                             type="submit"
-                            disabled={creating || !name.trim()}
+                            disabled={creating || !name.trim() || (selectedRepo && !branch)}
                         >
                             {creating ? "Creating…" : "Create Project"}
                         </button>
