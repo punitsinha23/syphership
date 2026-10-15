@@ -24,6 +24,15 @@ def fake_latest_commit(monkeypatch):
     return calls
 
 
+@pytest.fixture(autouse=True)
+def fake_run_deployment(monkeypatch):
+    """Never run the real clone/build/run pipeline from API tests.
+    Records the deployment ids that were queued as background tasks."""
+    queued = []
+    monkeypatch.setattr(routes.deployments, "run_deployment", queued.append)
+    return queued
+
+
 def create_project(email, name="Deployment Test Project", repo=True, github=True):
     """Insert a project for the user with this email straight into the DB, so the
     GitHub repo check in POST /projects/ is skipped. Returns the project id."""

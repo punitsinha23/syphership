@@ -24,3 +24,11 @@ def update_deployment_status(deployment, new_status: DeploymentStatus, failure_r
     deployment.status = new_status
     if new_status == DeploymentStatus.FAILED:
         deployment.failure_reason = failure_reason
+
+
+def save_container_id(deployment, container_id:str) -> None:
+    if not isinstance(container_id, str) or not container_id.strip():
+        raise ValueError("Invalid container ID.")
+
+
+    deployment.container_id = container_id.strip()
