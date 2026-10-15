@@ -2,33 +2,50 @@ from pathlib import Path
 from unittest.mock import patch
 import pytest
 import subprocess
-from services.docker_services import build_docker_image, run_docker_container, get_container_status, get_exposed_port, get_host_port
-from services.errors import DeploymentError
+from services.docker_services import (
+    MAX_BUILD_LOG_CHARS,
+    _trim_log,
+    build_docker_image,
+    get_container_status,
+    get_exposed_port,
+    get_host_port,
+    remove_deployment_resources,
+    run_docker_container,
+)
+from services.errors import BuildError, DeploymentError
 from unittest.mock import MagicMock, patch
+
+def assert_docker_build_called(mock_run, tmp_path):
+    mock_run.assert_called_once_with(
+        [
+            "docker",
+            "build",
+            "--progress=plain",
+            "--tag",
+            "syphership-deployment-1:latest",
+            "--file",
+            str(tmp_path / "Dockerfile"),
+            str(tmp_path),
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=600,
+    )
+
 
 def test_build_docker_image(tmp_path):
     dockerfile = tmp_path / "Dockerfile"
     dockerfile.write_text("FROM python:3.12-slim\n")
 
     with patch('services.docker_services.subprocess.run') as mock_run:
-        image_tag = build_docker_image(tmp_path, deployment_id=1)
+        mock_run.return_value = MagicMock(stdout="#1 [internal] load build definition\n#2 DONE\n")
+        image_tag, logs = build_docker_image(tmp_path, deployment_id=1)
 
     assert image_tag == "syphership-deployment-1:latest"
-    mock_run.assert_called_once_with(
-        [
-            "docker",
-            "build",
-            "--tag",
-            "syphership-deployment-1:latest",
-            "--file",
-            str(dockerfile),
-            str(tmp_path)
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
+    assert logs == "#1 [internal] load build definition\n#2 DONE\n"
+    assert_docker_build_called(mock_run, tmp_path)
 
 def test_build_docker_image_missing_directory(tmp_path):
     missing_path = tmp_path / "does_not_exist"
@@ -58,32 +75,21 @@ def test_docker_timeout(tmp_path):
     dockerfile.write_text("FROM python:3.12-slim\n")
 
     with patch("services.docker_services.subprocess.run") as mock_run:
+        # TimeoutExpired can carry bytes even when text=True was passed.
         mock_run.side_effect = subprocess.TimeoutExpired(
             cmd="docker build",
             timeout=600,
+            output=b"#5 RUN npm install\n",
         )
 
         with pytest.raises(
-            DeploymentError,
+            BuildError,
             match="Docker build timed out",
-        ):
+        ) as error:
             build_docker_image(tmp_path, deployment_id=1)
 
-        mock_run.assert_called_once_with(
-            [
-                "docker",
-                "build",
-                "--tag",
-                "syphership-deployment-1:latest",
-                "--file",
-                str(dockerfile),
-                str(tmp_path),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
+        assert error.value.logs == "#5 RUN npm install\n"
+        assert_docker_build_called(mock_run, tmp_path)
 
 def test_docker_build_fail(tmp_path):
     dockerfile = tmp_path / "Dockerfile"
@@ -93,29 +99,48 @@ def test_docker_build_fail(tmp_path):
         mock_run.side_effect = subprocess.CalledProcessError(
                 returncode=1,
                 cmd="docker build",
+                output="#6 RUN npm run build\nnpm ERR! missing script: build\n",
                 )
 
         with pytest.raises(
-            DeploymentError,
+            BuildError,
             match="Docker build failed"
-        ):
+        ) as error:
             build_docker_image(tmp_path, deployment_id=1)
 
-        mock_run.assert_called_once_with(
-                    [
-                        "docker",
-                        "build",
-                        "--tag",
-                        "syphership-deployment-1:latest",
-                        "--file",
-                        str(dockerfile),
-                        str(tmp_path),
-                    ],
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=600,
-                )
+        assert "npm ERR! missing script: build" in error.value.logs
+        assert_docker_build_called(mock_run, tmp_path)
+
+
+def test_build_error_is_a_deployment_error():
+    # The runner catches DeploymentError, so BuildError must be one.
+    assert issubclass(BuildError, DeploymentError)
+
+
+def test_build_failure_without_output_has_empty_logs(tmp_path):
+    (tmp_path / "Dockerfile").write_text("FROM python:3.12-slim\n")
+
+    with patch("services.docker_services.subprocess.run") as mock_run:
+        mock_run.side_effect = subprocess.CalledProcessError(returncode=1, cmd="docker build")
+
+        with pytest.raises(BuildError) as error:
+            build_docker_image(tmp_path, deployment_id=1)
+
+    assert error.value.logs == ""
+
+
+def test_trim_log_keeps_short_output():
+    assert _trim_log("short log") == "short log"
+
+
+def test_trim_log_keeps_the_end_of_long_output():
+    output = "a" * MAX_BUILD_LOG_CHARS + "ERROR: the real problem"
+
+    trimmed = _trim_log(output)
+
+    assert trimmed.startswith("[earlier output truncated]\n")
+    assert trimmed.endswith("ERROR: the real problem")
+    assert len(trimmed) == len("[earlier output truncated]\n") + MAX_BUILD_LOG_CHARS
 
 def test_deployment_id_is_not_integer(tmp_path):
     with pytest.raises(ValueError, match="Invalid deployment ID"):
@@ -477,3 +502,51 @@ def test_get_host_port_invalid_port():
 def test_get_host_port_invalid_container_id():
     with pytest.raises(ValueError, match="Invalid Container ID"):
         get_host_port("", 80)
+
+
+@patch("services.docker_services.subprocess.run")
+@patch(
+    "services.docker_services.shutil.which",
+    return_value="/usr/bin/docker",
+)
+def test_remove_deployment_resources(mock_which, mock_run):
+    remove_deployment_resources(7)
+
+    assert [c.args[0] for c in mock_run.call_args_list] == [
+        ["docker", "rm", "--force", "syphership-deployment-7"],
+        ["docker", "rmi", "--force", "syphership-deployment-7:latest"],
+    ]
+    for c in mock_run.call_args_list:
+        assert "check" not in c.kwargs
+
+
+@patch("services.docker_services.subprocess.run")
+@patch(
+    "services.docker_services.shutil.which",
+    return_value="/usr/bin/docker",
+)
+def test_remove_deployment_resources_ignores_missing(mock_which, mock_run):
+    # Docker exits non-zero for "No such container"; that is not an error here.
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Error: No such container")
+
+    remove_deployment_resources(7)
+
+    assert mock_run.call_count == 2
+
+
+@patch(
+    "services.docker_services.shutil.which",
+    return_value="/usr/bin/docker",
+)
+@patch(
+    "services.docker_services.subprocess.run",
+    side_effect=subprocess.TimeoutExpired(cmd="docker rm", timeout=60),
+)
+def test_remove_deployment_resources_timeout(mock_run, mock_which):
+    with pytest.raises(RuntimeError, match="cleanup timed out"):
+        remove_deployment_resources(7)
+
+
+def test_remove_deployment_resources_invalid_id():
+    with pytest.raises(ValueError, match="Invalid deployment ID"):
+        remove_deployment_resources(0)

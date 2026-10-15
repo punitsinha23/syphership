@@ -1,4 +1,3 @@
-"""Provider-agnostic OAuth sign-in: state/CSRF handling, account linking and login codes."""
 import hashlib
 import os
 import re

@@ -8,7 +8,8 @@ const stages = [
 ];
 
 function stepState(index, currentIndex, status) {
-  if (status === "RUNNING" || index < currentIndex) return "done";
+  // A stopped deployment ran successfully before it was replaced
+  if (status === "RUNNING" || status === "STOPPED" || index < currentIndex) return "done";
   if (index === currentIndex) return "active";
   return "pending";
 }
@@ -51,6 +52,15 @@ export default function DeploymentTimeline({ status }) {
           <span className="pipeline-index">ERR</span>
           <span className="pipeline-label">Failed</span>
           <span className="pipeline-hint">Deployment stopped</span>
+        </li>
+      )}
+
+      {status === "STOPPED" && (
+        <li className="pipeline-step pipeline-step-unknown">
+          <span className="pipeline-node" aria-hidden="true" />
+          <span className="pipeline-index">END</span>
+          <span className="pipeline-label">Stopped</span>
+          <span className="pipeline-hint">Replaced by a newer deployment</span>
         </li>
       )}
     </ol>

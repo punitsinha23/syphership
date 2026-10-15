@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react"
-import { Link, useParams } from "react-router-dom"
-import { getProjectDetails, createDeployment, getDeployments } from "../../api/projects"
+import { Link, useNavigate, useParams } from "react-router-dom"
+import { getProjectDetails, createDeployment, deleteProject, getDeployments } from "../../api/projects"
 import { getUser } from "../../api/user"
 import { connectGitHub } from "../../api/auth"
-import { generateMockSha } from "../../utils/mockCommit"
 import { formatDateTime, shortSha, timeAgo } from "../../utils/time"
+import { isInProgress } from "../../utils/deployment"
+import { usePolling } from "../../hooks/usePolling"
 import { DeploymentCard } from "../../components/DeploymentCard/DeploymentCard"
 import { StatusBadge } from "../../components/StatusBadge/StatusBadge"
 import { Navbar } from "../../components/Navbar/Navbar"
@@ -23,18 +24,39 @@ function ProjectDetails() {
     const [githubConnected, setGithubConnected] = useState(null)
     const [connecting, setConnecting] = useState(false)
 
+    const [deletingProject, setDeletingProject] = useState(false)
+
     const { project_id } = useParams()
+    const navigate = useNavigate()
+
+    async function handleDeleteProject() {
+        const confirmed = window.confirm(
+            `Delete "${projectDetails.name}"?\n\n` +
+            "This stops its live site and removes all of its deployments. This cannot be undone."
+        )
+        if (!confirmed) return
+
+        try {
+            setDeletingProject(true)
+            setError(null)
+            await deleteProject(projectDetails.id)
+            navigate("/projects")
+        } catch (error) {
+            setError(error.message)
+            setDeletingProject(false)
+        }
+    }
+
+    function handleDeploymentDeleted(deploymentId) {
+        setDeploymentHistory((prev) => prev.filter((item) => item.id !== deploymentId))
+    }
 
     async function handleSubmit() {
         try {
             setDeploying(true)
             setError(null)
-            const commitSha = generateMockSha()
 
-            await createDeployment(
-                projectDetails.id,
-                commitSha
-            )
+            await createDeployment(projectDetails.id)
 
             await loadDeployments()
         } catch (error) {
@@ -115,16 +137,14 @@ function ProjectDetails() {
         }
     },[project_id])
 
-    function handleStatusUpdated(updatedDeployment){
-        setDeploymentHistory((prev)=>
-            prev.map((item) =>
-                item.id === updatedDeployment.id ? updatedDeployment : item
-            )
-        )
-    }
+    const hasActiveDeployment = deploymentHistory.some((item) => isInProgress(item.status))
+
+    // Refresh the list while a deployment is queued, building or deploying
+    usePolling(hasActiveDeployment, () => loadDeployments())
 
     // The API returns deployments newest first
     const latest = deploymentHistory[0]
+    const live = deploymentHistory.find((item) => item.status === "RUNNING" && item.url)
 
     return (
             <div className="app-page">
@@ -162,6 +182,14 @@ function ProjectDetails() {
                                     </svg>
                                     {deploying ? "Deploying…" : "Deploy"}
                                 </button>
+                                <button
+                                    className="btn btn-danger"
+                                    onClick={handleDeleteProject}
+                                    disabled={deletingProject || hasActiveDeployment}
+                                    title={hasActiveDeployment ? "Wait for the current deployment to finish" : undefined}
+                                >
+                                    {deletingProject ? "Deleting…" : "Delete project"}
+                                </button>
                             </div>
                         )}
                     </header>
@@ -189,6 +217,21 @@ function ProjectDetails() {
                                 <div className="project-summary-item">
                                     <span className="project-summary-label">Status</span>
                                     <StatusBadge status={latest?.status} />
+                                </div>
+                                <div className="project-summary-item project-summary-item-wide">
+                                    <span className="project-summary-label">Live URL</span>
+                                    {live ? (
+                                        <a
+                                            className="project-summary-value project-summary-repo"
+                                            href={live.url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                        >
+                                            {live.url}
+                                        </a>
+                                    ) : (
+                                        <span className="project-summary-value project-summary-muted">Not deployed</span>
+                                    )}
                                 </div>
                                 <div className="project-summary-item">
                                     <span className="project-summary-label">Latest commit</span>
@@ -252,7 +295,7 @@ function ProjectDetails() {
                                             <DeploymentCard
                                                 key={item.id}
                                                 deployment={item}
-                                                onStatusUpdated={handleStatusUpdated}
+                                                onDeleted={handleDeploymentDeleted}
                                             />
                                         ))}
                                     </ul>

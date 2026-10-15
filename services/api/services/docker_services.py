@@ -1,14 +1,67 @@
 import subprocess
 from pathlib import Path
 import shutil
-from services.errors import DeploymentError
+from services.errors import BuildError, DeploymentError
 import json
+
+
+MAX_BUILD_LOG_CHARS = 100_000
+
+
+def deployment_resource_name(deployment_id: int) -> str:
+    """Name shared by a deployment's Docker container and image."""
+    return f"syphership-deployment-{deployment_id}"
+
+
+def remove_deployment_resources(deployment_id: int) -> None:
+    """Force-remove a deployment's container and image.
+
+    Safe to call when either one does not exist."""
+
+    if not isinstance(deployment_id, int) or deployment_id <= 0:
+        raise ValueError("Invalid deployment ID")
+
+    if shutil.which("docker") is None:
+        raise RuntimeError("Docker is not installed or is not available in PATH.")
+
+    name = deployment_resource_name(deployment_id)
+
+    for command in (
+        ["docker", "rm", "--force", name],
+        ["docker", "rmi", "--force", f"{name}:latest"],
+    ):
+        try:
+            # No check=True: "No such container/image" is fine here.
+            subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("Docker cleanup timed out.") from None
+        except FileNotFoundError:
+            raise RuntimeError("Docker executable could not be found.") from None
+
+
+def _output_text(output) -> str:
+    """Subprocess output as text; TimeoutExpired can hold bytes even with text=True."""
+    if isinstance(output, bytes):
+        return output.decode(errors="replace")
+    return output or ""
+
+
+def _trim_log(output: str) -> str:
+    """Keep the end of long logs, where build errors appear."""
+    if len(output) <= MAX_BUILD_LOG_CHARS:
+        return output
+    return "[earlier output truncated]\n" + output[-MAX_BUILD_LOG_CHARS:]
 
 
 def build_docker_image(
         repository_path: Path,
         deployment_id: int,
-) -> str:
+) -> tuple[str, str]:
     
     if not isinstance(deployment_id, int) or deployment_id <= 0:
         raise ValueError("Invalid deployment ID")
@@ -23,36 +76,45 @@ def build_docker_image(
     if not dockerfile.is_file():
         raise DeploymentError("No Dockerfile found at the repository root. Add a Dockerfile to deploy.")
 
-    image_tag = f"syphership-deployment-{deployment_id}:latest"
+    image_tag = f"{deployment_resource_name(deployment_id)}:latest"
 
     if shutil.which("docker") is None:
         raise RuntimeError("Docker is not installed or is not available in PATH.")
 
     try:
-        subprocess.run([
-            "docker",
-            "build",
-            "--tag",
-            image_tag,
-            "--file",
-            str(dockerfile),
-            str(repository_path)
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=600
+        result = subprocess.run(
+            [
+                "docker",
+                "build",
+                "--progress=plain",
+                "--tag",
+                image_tag,
+                "--file",
+                str(dockerfile),
+                str(repository_path),
+            ],
+            check=True,
+            # One stream, in order: BuildKit writes its progress to stderr.
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=600,
         )
-    except subprocess.TimeoutExpired:
-        raise DeploymentError("Docker build timed out after 10 minutes.") from None
-    except subprocess.CalledProcessError:
-        raise DeploymentError("Docker build failed. Check your Dockerfile.") from None
-    except FileNotFoundError:
-        raise RuntimeError(
-            "Docker exe could not be found"
+    except subprocess.TimeoutExpired as e:
+        raise BuildError(
+            "Docker build timed out after 10 minutes.",
+            _trim_log(_output_text(e.output)),
         ) from None
+    except subprocess.CalledProcessError as e:
+        raise BuildError(
+            "Docker build failed. See the build logs for details.",
+            _trim_log(_output_text(e.output)),
+        ) from None
+    except FileNotFoundError:
+        raise RuntimeError("Docker executable could not be found.") from None
 
-    return image_tag
+    return image_tag, _trim_log(result.stdout or "")
+
 
 
 
@@ -69,7 +131,7 @@ def run_docker_container(image_tag: str, deployment_id: int, container_port: int
     if shutil.which("docker") is None:
         raise RuntimeError("Docker is not installed or is not available in PATH.")
 
-    container_name = f"syphership-deployment-{deployment_id}"
+    container_name = deployment_resource_name(deployment_id)
 
     try:
         result = subprocess.run(

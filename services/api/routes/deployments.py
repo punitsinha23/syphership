@@ -4,10 +4,16 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.deployment import Deployment, DeploymentStatus
 from models.project import Project
-from schemas.deployment import DeploymentCreate, DeploymentResponse, DeploymentStatusUpdate
+from schemas.deployment import (
+    DeploymentCreate,
+    DeploymentLogsResponse,
+    DeploymentResponse,
+    DeploymentStatusUpdate,
+)
 from auth.dependencies import get_current_user
-from services.deployment_services import update_deployment_status
+from services.deployment_services import IN_PROGRESS_STATUSES, update_deployment_status
 from services.deployment_runner import run_deployment
+from services.docker_services import remove_deployment_resources
 from github.service import get_github_token, fetch_latest_commit
 
 
@@ -87,6 +93,65 @@ def get_deployment(
         )
 
     return deployment_db
+
+
+@router.get("/{deployment_id}/logs", response_model=DeploymentLogsResponse)
+def get_deployment_logs(
+    deployment_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    deployment_db = db.query(Deployment).join(Project).filter(
+        Deployment.id == deployment_id,
+        Project.user_id == user.id
+    ).first()
+
+    if deployment_db is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Deployment not found"
+        )
+
+    return deployment_db
+
+@router.delete("/{deployment_id}")
+def delete_deployment(
+    deployment_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    deployment_db = db.query(Deployment).join(Project).filter(
+        Deployment.id == deployment_id,
+        Project.user_id == user.id
+    ).first()
+
+    if deployment_db is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Deployment not found"
+        )
+
+    # The runner is still working on it and would recreate the container.
+    if deployment_db.status in IN_PROGRESS_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail="Wait for this deployment to finish before deleting it."
+        )
+
+    # Remove the container first so a failure never leaves it running unseen.
+    try:
+        remove_deployment_resources(deployment_db.id)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=502,
+            detail="Could not remove the deployment's container. Try again."
+        ) from None
+
+    db.delete(deployment_db)
+    db.commit()
+
+    return {"message": "Deployment deleted"}
+
 
 @router.patch( "/{deployment_id}/status", response_model=DeploymentResponse)
 def update_status(

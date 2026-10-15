@@ -1,6 +1,6 @@
 from enum import Enum
 from database import Base
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum, Text
 from datetime import datetime, timezone
 
 class DeploymentStatus(str, Enum):
@@ -9,6 +9,8 @@ class DeploymentStatus(str, Enum):
     DEPLOYING = "DEPLOYING"
     RUNNING = "RUNNING"
     FAILED = "FAILED"
+    # Replaced by a newer deployment of the same project; container removed.
+    STOPPED = "STOPPED"
 
 class Deployment(Base):
     __tablename__ = "deployments"
@@ -38,3 +40,4 @@ class Deployment(Base):
     host_port = Column(Integer, nullable=True)
     url = Column(String, nullable=True)
     failure_reason = Column(String)
+    build_logs = Column(Text, nullable=True)

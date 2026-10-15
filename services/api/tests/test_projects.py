@@ -1,3 +1,5 @@
+import pytest
+
 def test_projects_requires_auth(client):
     response = client.get("/projects/")
 
@@ -317,3 +319,80 @@ def test_update_project_branch_without_repo(client, auth_headers):
                           json={"name": "App", "description": "", "repo_branch": "dev"})
 
     assert response.status_code == 422
+
+
+@pytest.fixture
+def fake_remove_resources(monkeypatch):
+    """Never call real Docker from API tests; records removed deployment ids."""
+    import routes.projects
+    removed = []
+    monkeypatch.setattr(routes.projects, "remove_deployment_resources", removed.append)
+    return removed
+
+
+def add_deployment(project_id, status):
+    from models.deployment import Deployment
+    from tests.conftest import TestingSessionLocal
+
+    db = TestingSessionLocal()
+    try:
+        deployment = Deployment(project_id=project_id, commit_sha="a" * 40, status=status)
+        db.add(deployment)
+        db.commit()
+        return deployment.id
+    finally:
+        db.close()
+
+
+def create_plain_project(client, headers):
+    return client.post(
+        "/projects/",
+        headers=headers,
+        json={"name": "Delete Me", "description": ""},
+    ).json()["id"]
+
+
+def test_delete_project_removes_deployment_containers(client, auth_headers, fake_remove_resources):
+    from models.deployment import DeploymentStatus
+
+    project_id = create_plain_project(client, auth_headers)
+    running = add_deployment(project_id, DeploymentStatus.RUNNING)
+    failed = add_deployment(project_id, DeploymentStatus.FAILED)
+
+    response = client.delete(f"/projects/{project_id}", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert sorted(fake_remove_resources) == sorted([running, failed])
+    # Deployment rows are removed with the project.
+    assert client.get(f"/deployments/{running}", headers=auth_headers).status_code == 404
+
+
+def test_cannot_delete_project_while_deploying(client, auth_headers, fake_remove_resources):
+    from models.deployment import DeploymentStatus
+
+    project_id = create_plain_project(client, auth_headers)
+    add_deployment(project_id, DeploymentStatus.BUILDING)
+
+    response = client.delete(f"/projects/{project_id}", headers=auth_headers)
+
+    assert response.status_code == 409
+    assert fake_remove_resources == []
+    assert client.get(f"/projects/{project_id}", headers=auth_headers).status_code == 200
+
+
+def test_project_kept_when_container_removal_fails(client, auth_headers, monkeypatch):
+    import routes.projects
+    from models.deployment import DeploymentStatus
+
+    project_id = create_plain_project(client, auth_headers)
+    add_deployment(project_id, DeploymentStatus.RUNNING)
+
+    def fail(deployment_id):
+        raise RuntimeError("Docker cleanup timed out.")
+
+    monkeypatch.setattr(routes.projects, "remove_deployment_resources", fail)
+
+    response = client.delete(f"/projects/{project_id}", headers=auth_headers)
+
+    assert response.status_code == 502
+    assert client.get(f"/projects/{project_id}", headers=auth_headers).status_code == 200

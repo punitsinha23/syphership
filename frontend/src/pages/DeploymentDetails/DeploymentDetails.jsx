@@ -1,6 +1,8 @@
-import { getDeployment, getProjectDetails } from "../../api/projects"
+import { deleteDeployment, getDeployment, getDeploymentLogs, getProjectDetails } from "../../api/projects"
+import { isInProgress } from "../../utils/deployment"
+import { usePolling } from "../../hooks/usePolling"
 import { useState, useEffect } from "react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import DeploymentTimeline from "../../components/DeploymentTimeline/DeploymentTimeline"
 import BuildLogs from "../../components/BuildLogs/BuildLogs"
 import { Navbar } from "../../components/Navbar/Navbar"
@@ -21,8 +23,24 @@ function DeploymentDetails() {
     const [project, setProject] = useState(null)
     const [error, setError] = useState(null)
     const [loading, setLoading] = useState(true)
+    const [buildLogs, setBuildLogs] = useState(null)
+    const [deleting, setDeleting] = useState(false)
+    const [deleteError, setDeleteError] = useState(null)
 
     const { deployment_id } = useParams()
+    const navigate = useNavigate()
+
+    // Logs are optional on this page, so a failure only leaves them empty
+    async function loadLogs(isActive) {
+        try {
+            const data = await getDeploymentLogs(deployment_id)
+            if (isActive()) {
+                setBuildLogs(data.build_logs)
+            }
+        } catch {
+            // Keep whatever was shown before
+        }
+    }
 
     useEffect(() => {
             let cancelled = false
@@ -37,6 +55,8 @@ function DeploymentDetails() {
                     if (!cancelled) {
                         setDeploymentDetails(data)
                     }
+
+                    loadLogs(() => !cancelled)
 
                     // Only used for the breadcrumb, so a failure here isn't fatal
                     getProjectDetails(data.project_id)
@@ -64,8 +84,37 @@ function DeploymentDetails() {
             }
         }, [deployment_id])
 
+    const inProgress = isInProgress(deploymentDetails?.status)
+
+    // Follow the pipeline live until the deployment finishes
+    usePolling(inProgress, async () => {
+        try {
+            setDeploymentDetails(await getDeployment(deployment_id))
+            await loadLogs(() => true)
+        } catch {
+            // Keep showing the last known state; the next tick retries
+        }
+    })
+
+    async function handleDelete() {
+        const warning = deploymentDetails.status === "RUNNING"
+            ? "This deployment is live. Deleting it takes the site offline."
+            : "This removes the deployment and its build logs."
+        if (!window.confirm(`Delete deployment #${deploymentDetails.id}?\n\n${warning}`)) return
+
+        try {
+            setDeleting(true)
+            setDeleteError(null)
+            await deleteDeployment(deploymentDetails.id)
+            navigate(`/projects/${deploymentDetails.project_id}`)
+        } catch (error) {
+            setDeleteError(error.message)
+            setDeleting(false)
+        }
+    }
+
     const d = deploymentDetails
-    const finished = d && (d.status === "RUNNING" || d.status === "FAILED")
+    const finished = d && !inProgress
 
     return (
         <div className="app-page">
@@ -105,7 +154,21 @@ function DeploymentDetails() {
                                     {" "}· created {timeAgo(d.created_at)}
                                 </p>
                             </div>
+
+                            {!inProgress && (
+                                <div className="page-actions">
+                                    <button
+                                        className="btn btn-danger"
+                                        onClick={handleDelete}
+                                        disabled={deleting}
+                                    >
+                                        {deleting ? "Deleting…" : "Delete deployment"}
+                                    </button>
+                                </div>
+                            )}
                         </header>
+
+                        {deleteError && <div className="alert alert-error">{deleteError}</div>}
 
                         {d.failure_reason && (
                             <div className="alert alert-error deployment-failure">
@@ -124,6 +187,19 @@ function DeploymentDetails() {
                         </section>
 
                         <section className="section card deployment-info" aria-label="Details">
+                            {d.status === "RUNNING" && d.url && (
+                                <div className="deployment-info-item deployment-info-wide">
+                                    <span className="deployment-info-label">Live URL</span>
+                                    <a
+                                        className="deployment-info-value"
+                                        href={d.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                    >
+                                        {d.url}
+                                    </a>
+                                </div>
+                            )}
                             <div className="deployment-info-item deployment-info-wide">
                                 <span className="deployment-info-label">Commit SHA</span>
                                 <code className="deployment-info-value">{d.commit_sha}</code>
@@ -147,7 +223,7 @@ function DeploymentDetails() {
                         </section>
 
                         <section className="section">
-                            <BuildLogs logs={[]} />
+                            <BuildLogs logs={buildLogs} pending={inProgress} />
                         </section>
                     </>
                 )}

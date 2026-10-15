@@ -3,9 +3,12 @@ from sqlalchemy.orm import Session
 from auth.dependencies import get_current_user
 from database import get_db
 from models.user import User
+from models.deployment import Deployment
 from models.project import Project
 from schemas.project import ProjectCreate, ProjectResponse
 from github.service import fetch_repo_config, get_github_token
+from services.deployment_services import IN_PROGRESS_STATUSES
+from services.docker_services import remove_deployment_resources
 
 
 router = APIRouter(prefix='/projects')
@@ -93,6 +96,28 @@ def delete_project(project_id: int, db: Session = Depends(get_db), user: User = 
             detail="Project not found"
         )
 
+    deployments = db.query(Deployment).filter(
+        Deployment.project_id == db_project.id
+    ).all()
+
+    # A running build would keep going after its project is gone.
+    if any(deployment.status in IN_PROGRESS_STATUSES for deployment in deployments):
+        raise HTTPException(
+            status_code=409,
+            detail="Wait for the current deployment to finish before deleting this project."
+        )
+
+    # Remove every container and image before the rows that point to them.
+    try:
+        for deployment in deployments:
+            remove_deployment_resources(deployment.id)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=502,
+            detail="Could not remove the project's containers. Try again."
+        ) from None
+
+    # Deployments are removed by the database (ON DELETE CASCADE).
     db.delete(db_project)
     db.commit()
 

@@ -5,6 +5,8 @@ import { ProjectCard } from "../../components/ProjectCard/ProjectCard"
 import { StatusBadge } from "../../components/StatusBadge/StatusBadge"
 import { Navbar } from "../../components/Navbar/Navbar"
 import { shortSha, timeAgo, formatDateTime } from "../../utils/time"
+import { isInProgress } from "../../utils/deployment"
+import { usePolling } from "../../hooks/usePolling"
 import "./Dashboard.css"
 
 const RECENT_LIMIT = 6
@@ -24,6 +26,12 @@ function Dashboard() {
             .catch((error) => setError(error.message))
             .finally(() => setLoading(false))
     }, [])
+
+    // Keep statuses live while anything is still deploying
+    usePolling(
+        deployments.some((deployment) => isInProgress(deployment.status)),
+        () => getAllDeployments().then(setDeployments).catch(() => {})
+    )
 
     const latest = latestByProject(deployments)
     const latestStatuses = Object.values(latest).map((deployment) => deployment.status)
