@@ -11,6 +11,7 @@ class DeploymentResponse(BaseModel):
     project_id: int
     status: DeploymentStatus
     commit_sha: str
+    url: str | None
     created_at: datetime
     updated_at: datetime
     failure_reason: str | None
