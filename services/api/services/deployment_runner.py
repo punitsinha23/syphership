@@ -22,6 +22,7 @@ from services.docker_services import (
     get_container_status,
     get_exposed_port,
     get_host_port,
+    remove_deployment_resources,
 )
 from services.errors import DeploymentError
 from services.health_service import wait_for_healthy
@@ -32,8 +33,64 @@ logger = logging.getLogger(__name__)
 DEPLOYMENT_HOST = os.getenv("DEPLOYMENT_HOST", "localhost")
 
 
-def _mark_failed(db, deployment_id: int, reason: str) -> None:
-    """Roll back the session and mark an in-progress deployment as failed."""
+def _remove_resources(deployment_id: int) -> bool:
+    """Best-effort Docker cleanup; never raises. Returns True on success."""
+
+    try:
+        remove_deployment_resources(deployment_id)
+        return True
+    except Exception:
+        logger.exception(
+            "Could not remove Docker resources for deployment %s.",
+            deployment_id,
+        )
+        return False
+
+
+def _stop_previous_deployments(db, deployment) -> None:
+    """Stop older running deployments of the same project; never raises."""
+
+    try:
+        previous = (
+            db.query(Deployment)
+            .filter(
+                Deployment.project_id == deployment.project_id,
+                Deployment.status == DeploymentStatus.RUNNING,
+                # Only older ones, so a slow old build never stops a newer one.
+                Deployment.id < deployment.id,
+            )
+            .all()
+        )
+
+        for old in previous:
+            # Keep it RUNNING if its container could not be removed.
+            if _remove_resources(old.id):
+                update_deployment_status(old, DeploymentStatus.STOPPED)
+                logger.info(
+                    "Deployment %s stopped; replaced by %s.",
+                    old.id,
+                    deployment.id,
+                )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Could not stop previous deployments of project %s.",
+            deployment.project_id,
+        )
+
+
+def _mark_failed(
+    db,
+    deployment_id: int,
+    reason: str,
+    build_logs: str | None = None,
+) -> bool:
+    """Roll back the session and mark an in-progress deployment as failed.
+
+    Returns True if the deployment was marked as failed."""
 
     db.rollback()
 
@@ -58,7 +115,15 @@ def _mark_failed(db, deployment_id: int, reason: str) -> None:
             DeploymentStatus.FAILED,
             reason,
         )
+
+        # Set after the rollback above, which discards unsaved changes.
+        if build_logs is not None:
+            deployment.build_logs = build_logs
+
         db.commit()
+        return True
+
+    return False
 
 
 def run_deployment(deployment_id: int) -> None:
@@ -142,6 +207,10 @@ def run_deployment(deployment_id: int) -> None:
             )
             db.commit()
 
+            # Remove leftovers with this deployment's name (e.g. after a DB reset),
+            # otherwise "docker run --name" fails.
+            _remove_resources(deployment.id)
+
             # 2. Clone the exact commit selected for this deployment.
             repository_path = clone_repository(
                 repo_url=project.repo_clone_url,
@@ -151,10 +220,11 @@ def run_deployment(deployment_id: int) -> None:
             )
 
             # 3. Build the Docker image.
-            image_tag = build_docker_image(
+            image_tag, build_logs = build_docker_image(
                 repository_path,
                 deployment.id,
             )
+            deployment.build_logs = build_logs
 
             # Read the port the app listens on from the Dockerfile's EXPOSE.
             container_port = get_exposed_port(image_tag)
@@ -207,6 +277,9 @@ def run_deployment(deployment_id: int) -> None:
                 deployment_id,
             )
 
+            # 8. The new version is live; retire the old ones.
+            _stop_previous_deployments(db, deployment)
+
         except DeploymentError as error:
             # Expected failure with a message meant for the user.
             logger.warning(
@@ -214,7 +287,14 @@ def run_deployment(deployment_id: int) -> None:
                 deployment_id,
                 error,
             )
-            _mark_failed(db, deployment_id, str(error))
+            if _mark_failed(
+                db,
+                deployment_id,
+                str(error),
+                # Only BuildError carries logs; other errors give None.
+                build_logs=getattr(error, "logs", None),
+            ):
+                _remove_resources(deployment_id)
 
         except Exception:
             # Unexpected failure; keep internal details in the server logs.
@@ -222,11 +302,13 @@ def run_deployment(deployment_id: int) -> None:
                 "Deployment %s failed.",
                 deployment_id,
             )
-            _mark_failed(
+            # Only clean up if it really failed; never remove a RUNNING container.
+            if _mark_failed(
                 db,
                 deployment_id,
                 "Deployment failed due to an internal error.",
-            )
+            ):
+                _remove_resources(deployment_id)
 
     finally:
         db.close()

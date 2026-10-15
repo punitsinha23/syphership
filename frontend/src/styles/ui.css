@@ -181,6 +181,18 @@
   color: var(--color-text-primary);
 }
 
+/* Destructive actions: quiet until hovered */
+.btn-danger {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: transparent;
+  color: var(--color-status-failed);
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--color-status-failed);
+  background: rgba(248, 113, 113, 0.1);
+}
+
 .btn-sm {
   min-height: 30px;
   padding: 0 11px;
@@ -244,6 +256,7 @@
 .status-deploying { color: var(--color-status-deploying); }
 .status-running { color: var(--color-status-running); }
 .status-failed { color: var(--color-status-failed); }
+.status-stopped { color: var(--color-text-muted); }
 .status-none { color: var(--color-text-muted); }
 
 /* ================================

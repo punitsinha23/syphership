@@ -2,6 +2,7 @@ import pytest
 
 import routes.deployments
 from auth.security import encrypt_secret
+from models.deployment import Deployment, DeploymentStatus
 from models.project import Project
 from models.user import OAuthAccount, User
 from tests.conftest import TestingSessionLocal
@@ -225,3 +226,119 @@ def test_deployment_not_found(client, auth_headers):
     )
 
     assert response.status_code == 404
+
+
+def set_build_logs(deployment_id, logs):
+    """Simulate the runner having saved build output."""
+    db = TestingSessionLocal()
+    try:
+        deployment = db.query(Deployment).filter(Deployment.id == deployment_id).first()
+        deployment.build_logs = logs
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_get_deployment_logs(client, auth_headers, project_id):
+    deployment_id = deploy(client, auth_headers, project_id).json()["id"]
+    set_build_logs(deployment_id, "#6 RUN npm run build\nnpm ERR! missing script: build\n")
+
+    response = client.get(f"/deployments/{deployment_id}/logs", headers=auth_headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == deployment_id
+    assert data["status"] == "QUEUED"
+    assert "npm ERR! missing script: build" in data["build_logs"]
+
+
+def test_deployment_logs_are_empty_before_build(client, auth_headers, project_id):
+    deployment_id = deploy(client, auth_headers, project_id).json()["id"]
+
+    response = client.get(f"/deployments/{deployment_id}/logs", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json()["build_logs"] is None
+
+
+def test_other_user_cannot_read_deployment_logs(client, auth_headers, user2_headers, project_id):
+    deployment_id = deploy(client, auth_headers, project_id).json()["id"]
+    set_build_logs(deployment_id, "secret build output")
+
+    response = client.get(f"/deployments/{deployment_id}/logs", headers=user2_headers)
+
+    assert response.status_code == 404
+    assert "secret build output" not in response.text
+
+
+def test_deployment_list_does_not_include_build_logs(client, auth_headers, project_id):
+    deployment_id = deploy(client, auth_headers, project_id).json()["id"]
+    set_build_logs(deployment_id, "x" * 10_000)
+
+    response = client.get("/deployments/", headers=auth_headers)
+
+    assert "build_logs" not in response.json()[0]
+
+
+@pytest.fixture(autouse=True)
+def fake_remove_resources(monkeypatch):
+    """Never call real Docker from API tests; records removed deployment ids."""
+    removed = []
+    monkeypatch.setattr(routes.deployments, "remove_deployment_resources", removed.append)
+    return removed
+
+
+def set_status(deployment_id, status):
+    db = TestingSessionLocal()
+    try:
+        deployment = db.query(Deployment).filter(Deployment.id == deployment_id).first()
+        deployment.status = status
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_delete_finished_deployment(client, auth_headers, project_id, fake_remove_resources):
+    deployment_id = deploy(client, auth_headers, project_id).json()["id"]
+    set_status(deployment_id, DeploymentStatus.RUNNING)
+
+    response = client.delete(f"/deployments/{deployment_id}", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert fake_remove_resources == [deployment_id]
+    assert client.get(f"/deployments/{deployment_id}", headers=auth_headers).status_code == 404
+
+
+def test_cannot_delete_deployment_in_progress(client, auth_headers, project_id, fake_remove_resources):
+    deployment_id = deploy(client, auth_headers, project_id).json()["id"]
+
+    response = client.delete(f"/deployments/{deployment_id}", headers=auth_headers)
+
+    assert response.status_code == 409
+    assert fake_remove_resources == []
+    assert client.get(f"/deployments/{deployment_id}", headers=auth_headers).status_code == 200
+
+
+def test_other_user_cannot_delete_deployment(client, auth_headers, user2_headers, project_id, fake_remove_resources):
+    deployment_id = deploy(client, auth_headers, project_id).json()["id"]
+    set_status(deployment_id, DeploymentStatus.FAILED)
+
+    response = client.delete(f"/deployments/{deployment_id}", headers=user2_headers)
+
+    assert response.status_code == 404
+    assert fake_remove_resources == []
+
+
+def test_deployment_kept_when_container_removal_fails(client, auth_headers, project_id, monkeypatch):
+    deployment_id = deploy(client, auth_headers, project_id).json()["id"]
+    set_status(deployment_id, DeploymentStatus.RUNNING)
+
+    def fail(deployment_id):
+        raise RuntimeError("Docker cleanup timed out.")
+
+    monkeypatch.setattr(routes.deployments, "remove_deployment_resources", fail)
+
+    response = client.delete(f"/deployments/{deployment_id}", headers=auth_headers)
+
+    assert response.status_code == 502
+    assert client.get(f"/deployments/{deployment_id}", headers=auth_headers).status_code == 200

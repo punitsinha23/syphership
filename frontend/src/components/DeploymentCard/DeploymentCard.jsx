@@ -1,41 +1,32 @@
 import "./DeploymentCard.css"
 import { useState } from "react"
-import { updateStatus } from "../../api/projects"
 import { Link } from "react-router-dom"
+import { deleteDeployment } from "../../api/projects"
 import { StatusBadge } from "../StatusBadge/StatusBadge"
 import { formatDateTime, shortSha, timeAgo } from "../../utils/time"
-
-const NEXT_STATUS = {
-    QUEUED: "BUILDING",
-    BUILDING: "DEPLOYING",
-    DEPLOYING: "RUNNING"
-}
+import { isInProgress } from "../../utils/deployment"
 
 // One row of a project's deployment list (rendered inside a <ul>)
-export function DeploymentCard({ deployment, onStatusUpdated }) {
-    const [updating, setUpdating] = useState(false)
+export function DeploymentCard({ deployment, onDeleted }) {
+    const [deleting, setDeleting] = useState(false)
     const [error, setError] = useState(null)
 
     const status = deployment.status
-    const nextStatus = NEXT_STATUS[status]
 
-    async function handleSubmit() {
-        if (!nextStatus || updating) return
+    async function handleDelete() {
+        const warning = status === "RUNNING"
+            ? "This deployment is live. Deleting it takes the site offline."
+            : "This removes the deployment and its build logs."
+        if (!window.confirm(`Delete deployment #${deployment.id}?\n\n${warning}`)) return
 
         try {
-            setUpdating(true)
+            setDeleting(true)
             setError(null)
-
-            const data = await updateStatus(
-                deployment.id,
-                nextStatus
-            )
-
-            onStatusUpdated?.(data)
+            await deleteDeployment(deployment.id)
+            onDeleted?.(deployment.id)
         } catch (error) {
             setError(error.message)
-        } finally {
-            setUpdating(false)
+            setDeleting(false)
         }
     }
 
@@ -60,17 +51,15 @@ export function DeploymentCard({ deployment, onStatusUpdated }) {
                 </time>
 
                 <div className="deployment-row-actions">
-                    {nextStatus && (
-                        <button
+                    {status === "RUNNING" && deployment.url && (
+                        <a
                             className="btn btn-secondary btn-sm"
-                            onClick={handleSubmit}
-                            disabled={updating}
-                            title={`Move this deployment to ${nextStatus}`}
+                            href={deployment.url}
+                            target="_blank"
+                            rel="noreferrer"
                         >
-                            {updating ? "Updating…" : (
-                                <>Advance<span className="deployment-row-next"> → {nextStatus}</span></>
-                            )}
-                        </button>
+                            Visit
+                        </a>
                     )}
                     <Link
                         className="btn btn-ghost btn-sm"
@@ -79,6 +68,16 @@ export function DeploymentCard({ deployment, onStatusUpdated }) {
                     >
                         View
                     </Link>
+                    {!isInProgress(status) && (
+                        <button
+                            className="btn btn-danger btn-sm"
+                            onClick={handleDelete}
+                            disabled={deleting}
+                            aria-label={`Delete deployment #${deployment.id}`}
+                        >
+                            {deleting ? "Deleting…" : "Delete"}
+                        </button>
+                    )}
                 </div>
             </div>
 

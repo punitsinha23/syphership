@@ -1,24 +1,38 @@
+import { useEffect, useRef } from "react";
 import "./BuildLogs.css";
 
-export default function BuildLogs({ logs = [] }) {
+// logs: the raw build output from the API (one string), or null
+export default function BuildLogs({ logs = null, pending = false }) {
+  const contentRef = useRef(null);
+  const lines = logs ? logs.replace(/\n$/, "").split("\n") : [];
+
+  // Build errors are at the end, so start scrolled to the bottom
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = contentRef.current.scrollHeight;
+    }
+  }, [logs]);
+
   return (
     <div className="build-logs">
       <div className="build-logs-header">
         <h3>Build output</h3>
-        <span>{logs.length} {logs.length === 1 ? "line" : "lines"}</span>
+        <span>{lines.length} {lines.length === 1 ? "line" : "lines"}</span>
       </div>
 
-      {logs.length === 0 ? (
+      {lines.length === 0 ? (
         <div className="build-logs-empty">
           <span className="build-logs-prompt">$</span>
-          No build output yet. Logs will stream here once builds run.
+          {pending
+            ? "Building… output appears here when the build finishes."
+            : "No build output for this deployment."}
         </div>
       ) : (
-        <div className="build-logs-content">
-          {logs.map((log, index) => (
+        <div className="build-logs-content" ref={contentRef}>
+          {lines.map((line, index) => (
             <div className="log-line" key={index}>
               <span className="log-number">{index + 1}</span>
-              <span>{log}</span>
+              <span>{line}</span>
             </div>
           ))}
         </div>

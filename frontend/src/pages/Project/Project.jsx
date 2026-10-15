@@ -4,6 +4,8 @@ import { getBranches } from "../../api/github"
 import { ProjectCard } from "../../components/ProjectCard/ProjectCard"
 import { RepoPicker } from "../../components/RepoPicker/RepoPicker"
 import { Navbar } from "../../components/Navbar/Navbar"
+import { isInProgress } from "../../utils/deployment"
+import { usePolling } from "../../hooks/usePolling"
 import "./Project.css"
 
 function Projects() {
@@ -40,6 +42,14 @@ function Projects() {
 
         loadProjects()
     }, [])
+
+    // Keep project statuses live while any deployment is in progress
+    usePolling(
+        Object.values(latest).some((deployment) => isInProgress(deployment.status)),
+        () => getAllDeployments()
+            .then((deploymentData) => setLatest(latestByProject(deploymentData)))
+            .catch(() => {})
+    )
 
     async function handleSelectRepo(repo) {
         setSelectedRepo(repo)

@@ -24,15 +24,15 @@ export function createProject(name, description, repoFullName = null, repoBranch
     })
 }
 
-export function createDeployment(project_id, commit_sha) {
+// The API deploys the latest commit of the project's branch
+export function createDeployment(project_id) {
     return apiFetch("/deployments/", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            project_id: project_id,
-            commit_sha: commit_sha
+            project_id: project_id
         })
     })
 }
@@ -65,6 +65,18 @@ export function updateStatus(deployment_id, status) {
             status: status
         })
     })
+}
+
+export function deleteProject(project_id) {
+    return apiFetch(`/projects/${project_id}`, { method: "DELETE" })
+}
+
+export function deleteDeployment(deployment_id) {
+    return apiFetch(`/deployments/${deployment_id}`, { method: "DELETE" })
+}
+
+export function getDeploymentLogs(deployment_id) {
+    return apiFetch(`/deployments/${deployment_id}/logs`)
 }
 
 export function getDeployment(deployment_id){
