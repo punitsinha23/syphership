@@ -5,6 +5,7 @@ from auth.security import encrypt_secret
 from models.deployment import Deployment, DeploymentStatus
 from models.project import Project
 from models.user import OAuthAccount, User
+from services.deployment_services import update_deployment_status
 from tests.conftest import TestingSessionLocal
 
 
@@ -112,66 +113,41 @@ def test_deployment_requires_github_connected(client, auth_headers):
     assert response.status_code == 403
 
 
-def test_deployment_status_flow(client, auth_headers, project_id):
-    deployment_id = deploy(client, auth_headers, project_id).json()["id"]
+def test_deployment_status_flow():
+    deployment = Deployment(status=DeploymentStatus.QUEUED)
 
-    for status in ["BUILDING", "DEPLOYING", "RUNNING"]:
-        response = client.patch(
-            f"/deployments/{deployment_id}/status",
-            headers=auth_headers,
-            json={"status": status}
-        )
-
-        assert response.status_code == 200
-        assert response.json()["status"] == status
+    for status in [DeploymentStatus.BUILDING, DeploymentStatus.DEPLOYING, DeploymentStatus.RUNNING, DeploymentStatus.STOPPED]:
+        update_deployment_status(deployment, status)
+        assert deployment.status == status
 
 
-def test_invalid_deployment_status_transition(client, auth_headers, project_id):
-    deployment_id = deploy(client, auth_headers, project_id).json()["id"]
+def test_invalid_deployment_status_transition():
+    deployment = Deployment(status=DeploymentStatus.RUNNING)
 
-    # Move deployment to RUNNING
-    for status in ["BUILDING", "DEPLOYING", "RUNNING"]:
-        client.patch(
-            f"/deployments/{deployment_id}/status",
-            headers=auth_headers,
-            json={"status": status}
-        )
-
-    # RUNNING → BUILDING should fail
-    response = client.patch(
-        f"/deployments/{deployment_id}/status",
-        headers=auth_headers,
-        json={"status": "BUILDING"}
-    )
-
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Invalid deployment status transition"
+    with pytest.raises(ValueError, match="Invalid deployment status transition"):
+        update_deployment_status(deployment, DeploymentStatus.BUILDING)
 
 
-def test_deployment_can_fail(client, auth_headers, project_id):
+def test_deployment_can_fail():
+    deployment = Deployment(status=DeploymentStatus.BUILDING)
+
+    update_deployment_status(deployment, DeploymentStatus.FAILED, "Build failed")
+
+    assert deployment.status == DeploymentStatus.FAILED
+    assert deployment.failure_reason == "Build failed"
+
+
+def test_status_cannot_be_set_through_api(client, auth_headers, project_id):
+    # Only the deployment runner moves a deployment between states.
     deployment_id = deploy(client, auth_headers, project_id).json()["id"]
 
     response = client.patch(
         f"/deployments/{deployment_id}/status",
         headers=auth_headers,
-        json={"status": "FAILED", "failure_reason": "Build failed"}
+        json={"status": "RUNNING"}
     )
 
-    assert response.status_code == 200
-    assert response.json()["status"] == "FAILED"
-    assert response.json()["failure_reason"] == "Build failed"
-
-
-def test_failed_status_requires_failure_reason(client, auth_headers, project_id):
-    deployment_id = deploy(client, auth_headers, project_id).json()["id"]
-
-    response = client.patch(
-        f"/deployments/{deployment_id}/status",
-        headers=auth_headers,
-        json={"status": "FAILED"}
-    )
-
-    assert response.status_code == 422
+    assert response.status_code == 404
 
 
 def test_other_user_cannot_access_deployment(client, auth_headers, user2_headers, project_id):
@@ -203,18 +179,6 @@ def test_get_deployments(client, auth_headers, project_id):
 def test_other_user_cannot_create_deployment_for_project(client, user2_headers, project_id):
     # project_id belongs to user 1
     response = deploy(client, user2_headers, project_id)
-
-    assert response.status_code == 404
-
-
-def test_other_user_cannot_update_deployment(client, auth_headers, user2_headers, project_id):
-    deployment_id = deploy(client, auth_headers, project_id).json()["id"]
-
-    response = client.patch(
-        f"/deployments/{deployment_id}/status",
-        headers=user2_headers,
-        json={"status": "BUILDING"}
-    )
 
     assert response.status_code == 404
 

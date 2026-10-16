@@ -37,7 +37,5 @@ class Deployment(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
-    host_port = Column(Integer, nullable=True)
-    url = Column(String, nullable=True)
     failure_reason = Column(String)
     build_logs = Column(Text, nullable=True)

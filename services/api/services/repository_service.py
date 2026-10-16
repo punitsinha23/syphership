@@ -26,11 +26,6 @@ def clone_repository(
     if not commit_sha or len(commit_sha) != 40:
         raise ValueError("Invalid commit SHA.")
 
-    print(
-        f"deployment_id={deployment_id}, "
-        f"type={type(deployment_id).__name__}"
-    )
-
     if not isinstance(deployment_id, int) or deployment_id <= 0:
         raise ValueError("Invalid deployment ID.")
 

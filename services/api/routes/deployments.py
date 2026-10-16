@@ -8,10 +8,9 @@ from schemas.deployment import (
     DeploymentCreate,
     DeploymentLogsResponse,
     DeploymentResponse,
-    DeploymentStatusUpdate,
 )
 from auth.dependencies import get_current_user
-from services.deployment_services import IN_PROGRESS_STATUSES, update_deployment_status
+from services.deployment_services import IN_PROGRESS_STATUSES
 from services.deployment_runner import run_deployment
 from services.docker_services import remove_deployment_resources
 from github.service import get_github_token, fetch_latest_commit
@@ -151,39 +150,3 @@ def delete_deployment(
     db.commit()
 
     return {"message": "Deployment deleted"}
-
-
-@router.patch( "/{deployment_id}/status", response_model=DeploymentResponse)
-def update_status(
-    deployment_id: int,
-    status_update: DeploymentStatusUpdate,
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user)
-):
-    deployment_db = db.query(Deployment).join(Project).filter(
-        Deployment.id == deployment_id,
-        Project.user_id == user.id
-    ).with_for_update(of=Deployment).first()
-
-    if deployment_db is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Deployment not found"
-        )
-
-    try:
-        update_deployment_status(
-            deployment_db,
-            status_update.status,
-            status_update.failure_reason,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
-
-    db.commit()
-    db.refresh(deployment_db)
-
-    return deployment_db

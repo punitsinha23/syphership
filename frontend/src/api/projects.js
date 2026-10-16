@@ -55,18 +55,6 @@ export function getDeployments(project_id) {
     return apiFetch(`/deployments/?project_id=${project_id}`)
 }
 
-export function updateStatus(deployment_id, status) {
-    return apiFetch(`/deployments/${deployment_id}/status`, {
-        method: "PATCH",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            status: status
-        })
-    })
-}
-
 export function deleteProject(project_id) {
     return apiFetch(`/projects/${project_id}`, { method: "DELETE" })
 }

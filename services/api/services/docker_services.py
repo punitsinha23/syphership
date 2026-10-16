@@ -3,9 +3,14 @@ from pathlib import Path
 import shutil
 from services.errors import BuildError, DeploymentError
 import json
+import os
 
 
 MAX_BUILD_LOG_CHARS = 100_000
+
+# Per-container limits so one app cannot starve the host or the other apps.
+CONTAINER_CPUS = os.getenv("DEPLOYMENT_CPUS", "0.5")
+CONTAINER_MEMORY = os.getenv("DEPLOYMENT_MEMORY", "256m")
 
 
 def deployment_resource_name(deployment_id: int) -> str:
@@ -141,6 +146,13 @@ def run_docker_container(image_tag: str, deployment_id: int, container_port: int
                 "-d",
                 "--name",
                 container_name,
+                "--cpus",
+                CONTAINER_CPUS,
+                "--memory",
+                CONTAINER_MEMORY,
+                # Same as --memory, so the container cannot use swap on top of it.
+                "--memory-swap",
+                CONTAINER_MEMORY,
                 # Publish on localhost only; the empty host port lets Docker pick a free one.
                 "-p",
                 f"127.0.0.1::{container_port}",
@@ -199,9 +211,6 @@ def get_container_status(container_id: str) -> str:
 
     except subprocess.CalledProcessError:
         raise ValueError("Docker container was not found.") from None
-
-    except subprocess.CalledProcessError:
-        raise RuntimeError("Docker container inspection failed.") from None
 
     except FileNotFoundError:
         raise RuntimeError("Docker executable could not be found.") from None
