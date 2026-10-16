@@ -21,18 +21,6 @@
   padding: 24px 0;
 }
 
-.landing-logo {
-  font-family: var(--font-mono);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: var(--color-text-primary);
-}
-
-.landing-logo-accent {
-  color: var(--color-accent);
-}
-
 .landing-nav-links {
   display: flex;
   gap: 24px;

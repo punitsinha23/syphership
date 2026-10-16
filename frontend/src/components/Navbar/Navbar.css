@@ -14,19 +14,8 @@
 }
 
 .navbar-logo {
-  display: block;
   padding: 0 10px;
   margin-bottom: 36px;
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: var(--color-text-primary);
-  white-space: nowrap;
-}
-
-.navbar-logo-accent {
-  color: var(--color-accent);
 }
 
 .navbar-links {
@@ -185,9 +174,15 @@
   }
 
   .navbar-logo {
+    flex-shrink: 0;
     margin-bottom: 0;
     padding: 0;
-    font-size: 12px;
+  }
+
+  /* Smaller lockup so it fits in one row with the links */
+  .navbar-logo .logo-image {
+    width: auto;
+    height: 20px;
   }
 
   .navbar-links {

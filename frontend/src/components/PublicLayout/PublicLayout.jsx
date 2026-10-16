@@ -1,4 +1,5 @@
 import { Link, NavLink } from "react-router-dom"
+import { Logo } from "../Logo/Logo"
 import { useScrollReveal } from "../../hooks/useScrollReveal"
 import "./PublicLayout.css"
 
@@ -9,11 +10,7 @@ export function PublicLayout({ children }) {
     return (
         <div className="landing-page" ref={revealRef}>
             <header className="landing-nav">
-                <Link className="landing-logo" to="/" aria-label="Syphership home">
-                    <span>SYPHER</span>
-                    <span className="landing-logo-accent">//</span>
-                    <span>SHIP</span>
-                </Link>
+                <Logo className="landing-logo" size={30} />
 
                 <nav className="landing-nav-links" aria-label="Main">
                     <Link to="/#how-it-works">How it works</Link>

@@ -24,17 +24,7 @@
 }
 
 .login-logo {
-  display: inline-block;
-  font-family: var(--font-mono);
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--color-text-primary);
-  margin-bottom: 12px;
-}
-
-.login-logo-accent {
-  color: var(--color-accent);
+  margin-bottom: 20px;
 }
 
 .login-title {

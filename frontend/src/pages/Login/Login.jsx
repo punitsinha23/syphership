@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom"
 import { OAuthButtons } from "../../components/OAuthButtons/OAuthButtons"
+import { Logo } from "../../components/Logo/Logo"
 import "./Login.css"
 
 
@@ -8,11 +8,7 @@ function Login(){
         <div className="login-page">
             <div className="login-container">
                 <div className="login-header">
-                    <Link className="login-logo" to="/">
-                        <span>SYPHER</span>
-                        <span className="login-logo-accent">//</span>
-                        <span>SHIP</span>
-                    </Link>
+                    <Logo className="login-logo" size={40} />
                     <h1 className="login-title">Welcome back</h1>
                     <p className="login-subtitle">Sign in to your account to continue</p>
                 </div>

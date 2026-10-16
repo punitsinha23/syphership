@@ -1,4 +1,5 @@
-import { NavLink, Link, useNavigate } from "react-router-dom"
+import { NavLink, useNavigate } from "react-router-dom"
+import { Logo } from "../Logo/Logo"
 import { getUser } from "../../api/user"
 import { clearSession } from "../../api/client"
 import { useEffect, useState } from "react"
@@ -32,11 +33,7 @@ export function Navbar() {
 
     return (
         <nav className="navbar" aria-label="Main">
-            <Link className="navbar-logo" to="/dashboard">
-                <span>SYPHER</span>
-                <span className="navbar-logo-accent">//</span>
-                <span>SHIP</span>
-            </Link>
+            <Logo className="navbar-logo" to="/dashboard" size={26} />
 
             <div className="navbar-links">
                 {LINKS.map((link) => (
