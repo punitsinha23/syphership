@@ -4,6 +4,7 @@ import { SpaceBackground } from "./components/SpaceBackground/SpaceBackground"
 import { EngineTrail } from "./components/EngineTrail/EngineTrail"
 
 import Landing from "./pages/Landing/Landing"
+import About from "./pages/About/About"
 import Login from "./pages/Login/Login"
 import Dashboard from "./pages/Dashboard/Dashboard"
 import Projects from "./pages/Project/Project"
@@ -20,6 +21,7 @@ function App(){
     <EngineTrail />
     <Routes>
       <Route path='/' element={<Landing/>}/>
+      <Route path='/about' element={<About/>}/>
       <Route path='/login' element={<Login/>}/>
       {/* Sign-up and sign-in are the same OAuth flow */}
       <Route path='/register' element={<Navigate to="/login" replace/>}/>

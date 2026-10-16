@@ -1,0 +1,256 @@
+.about-hero {
+  max-width: 760px;
+  padding: 72px 0 64px;
+}
+
+.about-title {
+  margin-bottom: 22px;
+  font-size: clamp(34px, 4.6vw, 54px);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.about-title-accent {
+  color: var(--color-accent);
+}
+
+.about-lead {
+  max-width: 640px;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+/* ================================
+   Sections
+   ================================ */
+
+.about-section {
+  padding: 56px 0 64px;
+  border-top: 1px solid var(--color-border);
+}
+
+.about-section-intro {
+  max-width: 620px;
+}
+
+.about-section-intro h2,
+.about-maker-text h2 {
+  margin-bottom: 10px;
+  font-size: clamp(22px, 2.6vw, 28px);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.about-section-intro p:not(.eyebrow) {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+/* ================================
+   Status lists
+   ================================ */
+
+.about-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.about-list-card {
+  padding: 24px;
+}
+
+.about-list-card h3 {
+  margin-bottom: 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.about-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.about-list li {
+  position: relative;
+  padding-left: 22px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.about-list li::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.about-list-done li::before {
+  background: var(--color-status-running);
+}
+
+/* Hollow dot: planned, not built */
+.about-list-next li::before {
+  border: 1px solid var(--color-text-muted);
+}
+
+/* ================================
+   Principles
+   ================================ */
+
+.about-principles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  margin: 32px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.about-principle-index {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+
+.about-principles h3 {
+  margin: 8px 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.about-principles p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.about-more {
+  margin: 32px 0 0;
+  color: var(--color-text-muted);
+  font-size: 13.5px;
+}
+
+.about-more a {
+  color: var(--color-accent);
+}
+
+/* ================================
+   Developer card
+   ================================ */
+
+.about-maker {
+  padding-bottom: 72px;
+}
+
+.about-maker-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  padding: 28px;
+}
+
+.about-avatar {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border: 1px solid var(--color-border-hover);
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.about-maker-text p:not(.eyebrow) {
+  max-width: 520px;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+.about-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.about-stack li {
+  padding: 3px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.about-maker-link {
+  gap: 8px;
+}
+
+/* ================================
+   Responsive
+   ================================ */
+
+@media (max-width: 900px) {
+  .about-principles {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .about-maker-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .about-maker-link {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 640px) {
+  .about-hero {
+    padding: 40px 0 44px;
+  }
+
+  .about-section {
+    padding: 44px 0 48px;
+  }
+
+  .about-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .about-list-card,
+  .about-maker-card {
+    padding: 20px;
+  }
+
+  .about-maker-card {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}

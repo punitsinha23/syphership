@@ -218,7 +218,7 @@ function ProjectDetails() {
                                     <span className="project-summary-label">Status</span>
                                     <StatusBadge status={latest?.status} />
                                 </div>
-                                <div className="project-summary-item project-summary-item-wide">
+                                <div className="project-summary-item project-summary-live">
                                     <span className="project-summary-label">Live URL</span>
                                     {live ? (
                                         <a
@@ -248,7 +248,7 @@ function ProjectDetails() {
                                         {latest ? timeAgo(latest.created_at) : "Never"}
                                     </span>
                                 </div>
-                                <div className="project-summary-item project-summary-item-wide">
+                                <div className="project-summary-item project-summary-repository">
                                     <span className="project-summary-label">Repository</span>
                                     {projectDetails.repo_full_name ? (
                                         <a
@@ -264,7 +264,7 @@ function ProjectDetails() {
                                         <span className="project-summary-value project-summary-muted">Not connected</span>
                                     )}
                                 </div>
-                                <div className="project-summary-item">
+                                <div className="project-summary-item project-summary-branch">
                                     <span className="project-summary-label">Branch</span>
                                     {projectDetails.repo_branch ? (
                                         <code className="project-summary-value">{projectDetails.repo_branch}</code>
