@@ -362,16 +362,16 @@ Initially, we can deploy locally without Kubernetes.
 
 Tasks:
 
-- [ ] Create deployment job
-- [ ] Clone GitHub repository
-- [ ] Detect/build application
-- [ ] Create Docker image
-- [ ] Start container
-- [ ] Assign port
-- [ ] Verify health
-- [ ] Store deployment URL
-- [ ] Capture build logs
-- [ ] Handle build failures
+- [x] Create deployment job
+- [x] Clone GitHub repository
+- [x] Detect/build application (build only: a root Dockerfile is required; auto-detection deferred)
+- [x] Create Docker image
+- [x] Start container
+- [x] Assign port
+- [x] Verify health
+- [x] Store deployment URL
+- [x] Capture build logs
+- [x] Handle build failures
 
 ---
 
