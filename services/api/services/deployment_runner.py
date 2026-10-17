@@ -12,6 +12,7 @@ from models.deployment import Deployment, DeploymentStatus
 from models.project import Project
 from models.user import User
 from services.deployment_services import (
+    IN_PROGRESS_STATUSES,
     update_deployment_status,
     save_container_id,
 )
@@ -124,6 +125,36 @@ def _mark_failed(
         return True
 
     return False
+
+
+def fail_interrupted_deployments(db) -> int:
+    """Mark deployments left in progress by a previous process as failed.
+
+    Builds run inside the API process (BackgroundTasks), so at startup none of
+    them can still be running. Revisit this once builds move to a worker.
+    Returns how many deployments were marked as failed."""
+
+    interrupted = (
+        db.query(Deployment)
+        .filter(Deployment.status.in_(IN_PROGRESS_STATUSES))
+        .all()
+    )
+    interrupted_ids = [deployment.id for deployment in interrupted]
+
+    for deployment in interrupted:
+        update_deployment_status(
+            deployment,
+            DeploymentStatus.FAILED,
+            "Deployment was interrupted by a server restart. Deploy again.",
+        )
+
+    db.commit()
+
+    for deployment_id in interrupted_ids:
+        logger.warning("Deployment %s was interrupted; marked as failed.", deployment_id)
+        _remove_resources(deployment_id)
+
+    return len(interrupted_ids)
 
 
 def run_deployment(deployment_id: int) -> None:

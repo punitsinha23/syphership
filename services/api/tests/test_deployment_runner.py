@@ -1,5 +1,8 @@
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
+
+import main
 
 import services.deployment_runner as runner
 from models.deployment import Deployment, DeploymentStatus
@@ -353,3 +356,33 @@ def test_other_projects_are_not_stopped(make_user, pipeline):
     runner.run_deployment(new_id)
 
     assert get_deployment(other_id).status == DeploymentStatus.RUNNING
+
+
+def test_interrupted_deployments_are_marked_failed(make_user, pipeline):
+    building_id = create_queued_deployment(make_user, status=DeploymentStatus.BUILDING)
+    project_id = get_deployment(building_id).project_id
+    running_id = add_deployment(project_id, DeploymentStatus.RUNNING)
+
+    db = TestingSessionLocal()
+    try:
+        assert runner.fail_interrupted_deployments(db) == 1
+    finally:
+        db.close()
+
+    building = get_deployment(building_id)
+    assert building.status == DeploymentStatus.FAILED
+    assert "interrupted" in building.failure_reason
+    assert pipeline["removed"] == [building_id]
+
+    assert get_deployment(running_id).status == DeploymentStatus.RUNNING
+
+
+def test_startup_fails_interrupted_deployments(make_user, pipeline, monkeypatch):
+    deployment_id = create_queued_deployment(make_user, status=DeploymentStatus.DEPLOYING)
+    monkeypatch.setattr(main, "SessionLocal", TestingSessionLocal)
+
+    # Entering the client runs the app's startup.
+    with TestClient(main.app):
+        pass
+
+    assert get_deployment(deployment_id).status == DeploymentStatus.FAILED

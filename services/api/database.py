@@ -16,7 +16,8 @@ DATABASE_URL = (
     f"{os.getenv('POSTGRES_DB')}"
 )
 
-engine = create_engine(DATABASE_URL)
+# Check connections before use so a Postgres restart doesn't hand out dead ones.
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 class Base(DeclarativeBase):
     pass

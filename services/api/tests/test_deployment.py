@@ -1,4 +1,5 @@
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 import routes.deployments
 from auth.security import encrypt_secret
@@ -181,6 +182,48 @@ def test_other_user_cannot_create_deployment_for_project(client, user2_headers, 
     response = deploy(client, user2_headers, project_id)
 
     assert response.status_code == 404
+
+
+def set_status(deployment_id, status):
+    db = TestingSessionLocal()
+    try:
+        db.query(Deployment).filter(Deployment.id == deployment_id).update({"status": status})
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_cannot_deploy_while_deployment_in_progress(client, auth_headers, project_id, fake_run_deployment):
+    first_id = deploy(client, auth_headers, project_id).json()["id"]
+
+    response = deploy(client, auth_headers, project_id)
+
+    assert response.status_code == 409
+    assert fake_run_deployment == [first_id]
+
+
+def test_can_deploy_after_previous_deployment_finished(client, auth_headers, project_id):
+    first_id = deploy(client, auth_headers, project_id).json()["id"]
+    set_status(first_id, DeploymentStatus.RUNNING)
+
+    response = deploy(client, auth_headers, project_id)
+
+    assert response.status_code == 200
+
+
+def test_database_rejects_second_in_progress_deployment(project_id):
+    # Covers two requests racing past the API check at the same time.
+    db = TestingSessionLocal()
+    try:
+        db.add(Deployment(project_id=project_id, commit_sha=FAKE_SHA, status=DeploymentStatus.QUEUED))
+        db.commit()
+        db.add(Deployment(project_id=project_id, commit_sha=FAKE_SHA, status=DeploymentStatus.BUILDING))
+
+        with pytest.raises(IntegrityError):
+            db.commit()
+    finally:
+        db.rollback()
+        db.close()
 
 
 def test_deployment_not_found(client, auth_headers):

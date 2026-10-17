@@ -10,6 +10,7 @@ from models.user import User
 from models.project import Project
 from models.deployment import Deployment
 from auth.security import create_session_tokens
+import main
 from main import app
 
 
@@ -40,7 +41,9 @@ def setup_db():
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    # Startup cleanup must touch the test DB, not the dev one.
+    monkeypatch.setattr(main, "SessionLocal", TestingSessionLocal)
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as c:
         yield c

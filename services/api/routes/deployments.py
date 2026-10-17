@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -18,6 +19,8 @@ from github.service import get_github_token, fetch_latest_commit
 
 
 router = APIRouter(prefix="/deployments")
+
+DEPLOYMENT_IN_PROGRESS = "A deployment of this project is already in progress."
 
 
 @router.post("/", response_model=DeploymentResponse)
@@ -42,9 +45,17 @@ def create_deployment(
         raise HTTPException(status_code=400, 
         detail="This project has no linked Github repository or branch.")
 
+    in_progress = db.query(Deployment.id).filter(
+        Deployment.project_id == project.id,
+        Deployment.status.in_(IN_PROGRESS_STATUSES)
+    ).first()
+
+    if in_progress is not None:
+        raise HTTPException(status_code=409, detail=DEPLOYMENT_IN_PROGRESS)
+
     token = get_github_token(db, user)
     commit_sha = fetch_latest_commit(token, project.repo_full_name, project.repo_branch)
-    
+
     new_deployment = Deployment(
         project_id=project.id,
         commit_sha=commit_sha,
@@ -52,7 +63,14 @@ def create_deployment(
     )
 
     db.add(new_deployment)
-    db.commit()
+
+    # The unique index catches two requests that both passed the check above.
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=DEPLOYMENT_IN_PROGRESS) from None
+
     db.refresh(new_deployment)
     background_tasks.add_task(run_deployment, new_deployment.id)
     return new_deployment
