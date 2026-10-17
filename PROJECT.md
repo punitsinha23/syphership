@@ -4,1242 +4,323 @@
 >
 > **Project type:** Developer Deployment Platform / Mini PaaS
 >
-> **Primary goal:** Build a platform where a developer connects a GitHub repository, clicks **Deploy**, and Syphership automatically builds, containerizes, deploys, and exposes the application through a live URL.
+> **Primary goal:** A developer signs in with GitHub, picks a repository, clicks **Deploy**, and Syphership builds, containerizes, runs, and exposes the application at a live URL.
 >
-> **Learning goal:** Use the project to understand full-stack development, backend architecture, microservices, asynchronous communication, Docker, Kubernetes, cloud infrastructure, and system design by actually building each part.
+> **Learning goal:** Understand backend and frontend fundamentals end to end — API design, auth, databases, async workers, containers, security, and production operations — by building a real, secure, horizontally scalable platform.
+>
+> **Deadline:** 2026-10-31. The project is complete after **8 phases (0–7)**. Everything else lives in the post-launch backlog (Section 9).
 
 ---
 
 ## 1. Product Vision
 
-Syphership is a small Platform-as-a-Service (PaaS).
+A developer can:
 
-A developer should eventually be able to:
-
-1. Sign in with GitHub.
-2. Connect/select a GitHub repository.
-3. Select a branch.
-4. Create a project.
-5. Click **Deploy**.
-6. Syphership clones the repository.
-7. A build worker creates a Docker image.
-8. The image is stored in a container registry.
-9. A deployment worker deploys it to Kubernetes.
-10. Syphership monitors the deployment.
-11. The developer receives a live URL.
-12. Future pushes can automatically trigger deployments through GitHub webhooks.
-
-Example:
+1. Sign in with GitHub (or Google, then connect GitHub).
+2. Select a GitHub repository and branch.
+3. Create a project.
+4. Click **Deploy** — or just `git push`.
+5. Syphership queues the deployment.
+6. A worker clones the repo and builds a Docker image from its `Dockerfile`.
+7. The worker runs the container in a sandbox with resource limits.
+8. Syphership health-checks it and routes `https://<project>.<domain>` to it.
+9. The developer watches build logs live and sees the deployment history.
 
 ```text
-GitHub Repository
-       |
-       v
-   Syphership
-       |
-       v
-      Build
-       |
-       v
-   Docker Image
-       |
-       v
-  Container Registry
-       |
-       v
-   Kubernetes
-       |
-       v
-  Live Application
+GitHub Repo ──► Syphership API ──► Redis Queue ──► Build Worker(s)
+                                                       │
+                                               docker build / run
+                                                       │
+                                                       ▼
+                                 Reverse Proxy (HTTPS) ──► Live App
 ```
 
 ---
 
-# 2. Core Engineering Principles
-
-These rules guide the entire project.
+## 2. Core Engineering Principles
 
 - Do not add technology just to put it on the resume.
-- Every service must have a clear responsibility.
-- Every infrastructure component must solve an actual problem.
+- Every component must solve a real problem in this system.
 - Understand each technology before depending on it.
-- Start simple and increase complexity deliberately.
-- Prefer observable systems over hidden magic.
 - Design for failure, not only the happy path.
-- Document architectural decisions.
+- Secure by default: least privilege, no secrets in logs, untrusted user code is isolated.
+- Scale by design: stateless API, work done by horizontally scalable workers.
 - Keep local development possible on an 8 GB RAM laptop.
-- Build the MVP before adding production-scale infrastructure.
+- **Ship by the deadline.** Each phase has *Must* and *Stretch* tasks. Stretch tasks are cut first.
 
 ---
 
-# 3. Target Architecture
-
-The final learning architecture is approximately:
+## 3. Final Architecture (what we will actually ship)
 
 ```text
-                         ┌─────────────┐
-                         │   GitHub    │
-                         └──────┬──────┘
-                                │
-                                v
-                         ┌─────────────┐
-                         │   Next.js   │
-                         │  Frontend   │
-                         └──────┬──────┘
-                                │
-                                v
-                         ┌─────────────┐
-                         │ API Gateway │
-                         └──────┬──────┘
-                                │
-             ┌──────────────────┼──────────────────┐
-             v                  v                  v
-      ┌─────────────┐   ┌─────────────┐   ┌──────────────┐
-      │Auth Service │   │Project      │   │ Deployment   │
-      │             │   │Service      │   │ Service      │
-      └─────────────┘   └─────────────┘   └──────┬───────┘
-                                                  │
-                                                  v
-                                           ┌─────────────┐
-                                           │ Message Bus  │
-                                           │ Redis/Kafka  │
-                                           └──────┬──────┘
-                                                  │
-                              ┌───────────────────┼───────────────────┐
-                              v                   v                   v
-                       ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-                       │Build Worker │    │Deploy Worker│    │Notification │
-                       │             │    │             │    │Service      │
-                       └──────┬──────┘    └──────┬──────┘    └─────────────┘
-                              │                  │
-                              v                  v
-                           Docker           Kubernetes
-                              │                  │
-                              v                  v
-                      Container Registry    Live Pods
+                         ┌──────────────┐
+                         │    GitHub    │── push webhook ─┐
+                         └──────┬───────┘                 │
+                                │ OAuth / repo API        │
+                                v                         v
+ ┌──────────────┐        ┌──────────────────────────────────────┐
+ │ React (Vite) │──────► │       FastAPI API (stateless)        │
+ │  Dashboard   │  REST  │ auth · projects · deployments ·      │
+ └──────────────┘  + SSE │ webhooks · rate limiting · metrics   │
+                         └───────┬───────────────────┬──────────┘
+                                 │                   │
+                                 v                   v
+                          ┌────────────┐     ┌────────────────┐
+                          │ PostgreSQL │     │ Redis          │
+                          │ (state)    │     │ queue (Stream) │
+                          └────────────┘     │ rate limits    │
+                                 ^           │ log pub/sub    │
+                                 │           └───────┬────────┘
+                                 │                   │ consumer group
+                                 │       ┌───────────┼───────────┐
+                                 │       v           v           v
+                                 └─ Build Worker  Build Worker  ... (N)
+                                         │
+                                  docker build / run
+                                  (sandboxed, isolated network)
+                                         │
+                                         v
+                          ┌──────────────────────────────┐
+                          │ Caddy reverse proxy (HTTPS)  │
+                          │ <project>.<domain> ──► app   │
+                          └──────────────────────────────┘
 ```
 
-**Important:** We will NOT build this entire architecture immediately.
-
-We will evolve toward it.
+**Why this and not microservices + Kafka + Kubernetes?** One well-structured API plus a queue and N workers already demonstrates the key distributed-systems ideas (producers/consumers, consumer groups, at-least-once delivery, idempotency, retries, dead-letter queues, horizontal scaling) and can be finished, secured, and defended in an interview. Kafka, Kubernetes, and service splitting are documented as next steps (Section 9).
 
 ---
 
-# 4. Technology Stack
+## 4. Technology Stack
 
-## Frontend
-
-- Next.js
-- TypeScript
-- Tailwind CSS
-- React
-
-## Backend
-
-- Python
-- FastAPI
-- Pydantic
-- SQLAlchemy
-- Alembic
-
-## Database
-
-- PostgreSQL
-
-## Caching / Initial Queue
-
-- Redis
-
-## Message Streaming — Later
-
-- Apache Kafka
-
-## Containers
-
-- Docker
-- Docker Compose
-
-## Orchestration
-
-- Kubernetes
-- Initially: kind or k3d
-- Later: cloud Kubernetes such as AWS EKS
-
-## Source Control Integration
-
-- GitHub OAuth
-- GitHub REST API
-- GitHub Webhooks
-
-## Cloud — Later
-
-Potential AWS components:
-
-- EKS
-- ECR
-- RDS
-- S3
-- ElastiCache
-- Route 53
-
-## Observability — Later
-
-- Prometheus
-- Grafana
-- OpenTelemetry
+| Area | Technology |
+|---|---|
+| Frontend | React 19, Vite, React Router, MUI |
+| Backend | Python, FastAPI, Pydantic, SQLAlchemy, Alembic |
+| Database | PostgreSQL |
+| Queue / cache | Redis (Streams + consumer groups, rate limiting, pub/sub) |
+| Auth | GitHub OAuth, Google OAuth, JWT access/refresh tokens |
+| Source control | GitHub REST API, GitHub Webhooks |
+| Containers | Docker, Docker Compose |
+| Edge / HTTPS | Caddy (reverse proxy, automatic TLS) |
+| CI | GitHub Actions |
+| Hosting | A single Linux VPS / cloud VM running Docker Compose |
+| Observability | Structured JSON logs, request IDs, Prometheus-format `/metrics` |
 
 ---
 
 # 5. Development Phases
 
-## Phase 0 — Project Foundation
+## Overview and Timeline
 
-**Goal:** Create a clean development environment.
+| Phase | Name | Status | Target dates |
+|---|---|---|---|
+| 0 | Project Foundation | ✅ Done | — |
+| 1 | MVP Backend | ✅ Done | — |
+| 2 | Frontend MVP | ✅ Done | — |
+| 3 | GitHub Integration | ✅ Done | — |
+| 4 | First Real Deployment | ✅ Done | — |
+| 5 | Redis Queue + Scalable Workers | ⏳ Next | Oct 17 – Oct 21 |
+| 6 | Security Hardening + Push-to-Deploy | ⬜ | Oct 22 – Oct 26 |
+| 7 | Production Launch (URLs, HTTPS, logs, CI/CD, docs) | ⬜ | Oct 27 – Oct 31 |
 
-- [ ] Create GitHub repository
-- [ ] Create project directory
-- [ ] Create `PROJECT.md`
-- [ ] Define repository structure
-- [ ] Initialize Git
-- [ ] Create `.gitignore`
-- [ ] Create `.env.example`
-- [ ] Add basic documentation
-- [ ] Create frontend project
-- [ ] Create FastAPI backend
-- [ ] Create Docker configuration
-- [ ] Create local PostgreSQL setup
-- [ ] Create local Redis setup
-- [ ] Verify all services start
+Rule: if a phase runs over its dates, cut its **Stretch** tasks — do not push the next phase.
 
 ---
 
-# 6. Phase 1 — MVP Backend
+## Phase 0 — Project Foundation ✅
 
-**Goal:** Build the core API before introducing microservices.
+- [x] Repository, directory structure, Git, `.gitignore`, `.env.example`
+- [x] FastAPI backend and React frontend projects
+- [x] Docker Compose with PostgreSQL and Redis
+- [x] All services start locally
 
-### Authentication
+## Phase 1 — MVP Backend ✅
 
-- [ ] User model
-- [ ] Registration
-- [ ] Login
-- [ ] Password hashing
-- [ ] JWT authentication
-- [ ] Authentication dependency
-- [ ] Protected endpoints
+- [x] User model and auth dependency on protected endpoints
+- [x] JWT access + refresh tokens
+- [x] Project CRUD
+- [x] Deployment model, state machine, history, commit SHA, timestamps, failure reason
+- [x] Alembic migrations, indexes
+- [x] Tests
 
-### Projects
+> Auth was redesigned to **OAuth-only** (GitHub + Google) — no passwords stored, which removes password-reuse and unverified-email takeover risks.
 
-- [ ] Create project
-- [ ] List projects
-- [ ] Get project
-- [ ] Update project
-- [ ] Delete project
+## Phase 2 — Frontend MVP ✅
 
-### Deployments
+- [x] Login, OAuth callback, dashboard, projects, project details, deployment details, settings
+- [x] Deploy button, status badges, deployment timeline, history, build logs view
+- [x] Loading and error states, polling for status
 
-Create deployment states:
+## Phase 3 — GitHub Integration ✅
 
-```text
-QUEUED
-   ↓
-BUILDING
-   ↓
-DEPLOYING
-   ↓
-RUNNING
-```
+- [x] GitHub OAuth with signed `state` + cookie nonce, one-time login codes
+- [x] Store linked accounts (`oauth_accounts`)
+- [x] List repositories and branches, store repo configuration on the project
 
-Failure path:
+## Phase 4 — First Real Deployment ✅
 
-```text
-QUEUED → BUILDING → FAILED
-QUEUED → BUILDING → DEPLOYING → FAILED
-```
-
-Tasks:
-
-- [ ] Deployment model
-- [ ] Create deployment endpoint
-- [ ] Deployment status
-- [ ] Deployment history
-- [ ] Commit SHA tracking
-- [ ] Deployment timestamps
-- [ ] Failure reason storage
+- [x] Create deployment job (FastAPI `BackgroundTasks`)
+- [x] Clone repo, `docker build` from root `Dockerfile` (auto-detection deliberately deferred)
+- [x] Start container with resource limits, assign port, health check
+- [x] Store URL and build logs, handle build failures
+- [x] Mark interrupted deployments FAILED on startup
 
 ---
 
-# 7. Phase 2 — Frontend MVP
+## Phase 5 — Redis Queue + Scalable Workers ⏳
 
-**Goal:** Give the platform a usable dashboard.
+**Dates:** Oct 17 – Oct 21
 
-Pages:
+**Goal:** Move builds out of the API process into separate, horizontally scalable worker processes, and make job processing reliable.
+
+Today builds run inside the API process (`BackgroundTasks`): an API restart kills builds, and the API cannot scale independently of build load. After this phase:
 
 ```text
-/login
-/register
-/dashboard
-/projects
-/projects/[id]
-/projects/[id]/deployments
-/settings
+API ──XADD──► Redis Stream "deployments" ──XREADGROUP──► Worker 1
+ (producer)        (consumer group "builders")      ├──► Worker 2
+                                                    └──► Worker N
+                         failed N times ──► "deployments:dead" (DLQ)
 ```
 
-Tasks:
+**Why Redis Streams (not a plain list or a library like RQ/Celery):** consumer groups, acknowledgements (`XACK`), pending-entry lists and `XAUTOCLAIM` teach the same concepts as Kafka (consumer groups, offsets/acks, at-least-once delivery, redelivery) using infrastructure we already run.
 
-- [ ] Authentication UI
-- [ ] Dashboard
-- [ ] Project creation
-- [ ] Project details
-- [ ] Deploy button
-- [ ] Deployment status
-- [ ] Deployment history
-- [ ] Build logs UI
-- [ ] Error states
-- [ ] Loading states
-- [ ] Responsive design
+Concepts to learn: producer, consumer, consumer group, ack, at-least-once delivery, idempotency, retry with backoff, dead-letter queue, visibility timeout / stuck jobs, graceful shutdown, backpressure.
+
+### Must
+
+- [ ] Fix leftover bugs first: naive vs aware timestamps, timeline on FAILED, remove stray `mui` package and stale `src/pages/DeploymentDetails.jsx`
+- [ ] `worker/` entrypoint (`python -m worker`) that reuses the existing `deployment_runner`
+- [ ] API publishes a job (`deployment_id` only) **after** the DB commit; `BackgroundTasks` removed
+- [ ] Worker consumes with `XREADGROUP`, `XACK`s only after the deployment reaches a final state
+- [ ] Idempotency: worker claims a job with a conditional update (`UPDATE ... SET status='BUILDING' WHERE id=? AND status='QUEUED'`); if 0 rows change, skip — duplicate deliveries are harmless
+- [ ] Retries for transient errors (Docker daemon / network) with exponential backoff and a max attempt count; build errors in the user's code are **not** retried
+- [ ] Dead-letter stream for jobs that exceed max attempts; deployment marked FAILED with a reason
+- [ ] Stuck-job recovery with `XAUTOCLAIM` (replaces the startup "mark interrupted as FAILED" cleanup)
+- [ ] Build timeout (e.g. 10 min) enforced by the worker
+- [ ] Graceful shutdown: on SIGTERM finish or release the current job, don't take new ones
+- [ ] Worker as its own service in `compose.yaml`; run `docker compose up --scale worker=2` and show two deployments building in parallel
+- [ ] Tests: publish → consume → state change; duplicate job is skipped; failed job lands in DLQ
+
+### Stretch
+
+- [ ] Per-user concurrency limit (max 1–2 active builds per user) — fairness and abuse protection
+- [ ] Queue depth exposed on an admin/health endpoint
+
+**Done when:** killing a worker mid-build results in the job being picked up again (or failed cleanly), and two workers process jobs in parallel without ever running the same deployment twice.
 
 ---
 
-# 8. Phase 3 — GitHub Integration
+## Phase 6 — Security Hardening + Push-to-Deploy
 
-**Goal:** Connect real repositories.
+**Dates:** Oct 22 – Oct 26
 
-- [ ] GitHub OAuth
-- [ ] Store GitHub account information
-- [ ] Request required GitHub permissions
-- [ ] List repositories
-- [ ] Select repository
-- [ ] Select branch
-- [ ] Retrieve repository metadata
-- [ ] Store repository configuration
-- [ ] Test repository access
+**Goal:** Make the platform safe to run untrusted user code on, and deploy automatically on `git push`.
 
-Target flow:
+A PaaS runs strangers' code on your machine. This phase is what makes the project "secure" rather than a demo. Write the threat model first (`docs/SECURITY.md`): assets (DB, tokens, host, other users' apps), attackers (malicious repo owner, other users, the internet), and the mitigation for each item below.
+
+### Must — Untrusted code isolation
+
+- [ ] Deployed containers run as non-root, `--cap-drop=ALL`, `--security-opt=no-new-privileges`, `--pids-limit`, memory/CPU limits (already have limits)
+- [ ] Deployed apps run on a separate Docker network: they **cannot** reach PostgreSQL, Redis, the API, or the Docker socket
+- [ ] Only the worker has access to the Docker socket; the API never does (document why: socket = root on host)
+- [ ] Limits: max repo size, build timeout (Phase 5), max image size, max running apps per user
+
+### Must — Secrets and data
+
+- [ ] Encrypt OAuth access tokens at rest (Fernet key from env); currently stored in plain text
+- [ ] Private repos: request repo scope (or GitHub App), clone with the token **without** it appearing in build logs, error messages, or `git remote -v`
+- [ ] Scrub secrets from build logs and API errors (test it)
+- [ ] Per-project environment variables, encrypted at rest, injected at `docker run`, shown masked in the UI
+
+### Must — API security
+
+- [ ] Authorization tests: user A gets 404 on user B's projects, deployments, logs (IDOR)
+- [ ] Validate repo names, branch names, and commit SHAs before they reach `git`/`docker` (no shell injection; never `shell=True`)
+- [ ] Rate limiting with Redis (fixed window or token bucket) on auth, deploy, and webhook endpoints
+- [ ] Strict CORS origins, security headers, short-lived access tokens, refresh token rotation reviewed
+
+### Must — Push-to-deploy (GitHub Webhooks)
 
 ```text
-User
- ↓
-Login with GitHub
- ↓
-Authorize Syphership
- ↓
-Select Repository
- ↓
-Select Branch
- ↓
-Create Project
+git push ──► GitHub ──► POST /github/webhook ──► verify HMAC ──► create deployment ──► queue
 ```
+
+- [ ] Webhook endpoint that verifies `X-Hub-Signature-256` (HMAC-SHA256, constant-time compare)
+- [ ] Deduplicate by `X-GitHub-Delivery` (stored in Redis with a TTL) — replay protection
+- [ ] Handle `push` events: match repo + branch to projects, create a deployment for the pushed commit
+- [ ] Register/unregister the webhook when a project is created/deleted (or document manual setup)
+- [ ] "Auto-deploy on push" toggle per project
+
+### Stretch
+
+- [ ] `pip-audit` / `npm audit` in CI (Phase 7)
+- [ ] Read-only root filesystem for deployed containers where possible
+
+**Done when:** `docs/SECURITY.md` exists, and a test repo whose app tries to connect to `postgres:5432` or call the Docker socket fails; a forged webhook is rejected; a push deploys automatically.
 
 ---
 
-# 9. Phase 4 — First Real Deployment
+## Phase 7 — Production Launch
 
-**This is the first major milestone.**
+**Dates:** Oct 27 – Oct 31
 
-**Goal:**
+**Goal:** Run Syphership on the internet with real URLs and HTTPS, live logs, basic observability, CI, and documentation good enough for a resume and interviews.
 
-> A user can connect a GitHub repository and receive a live deployed application.
-
-Architecture:
+### Must — Live URLs + HTTPS
 
 ```text
-Next.js
-   ↓
-FastAPI
-   ↓
-Deployment Request
-   ↓
-Build Worker
-   ↓
-git clone
-   ↓
-docker build
-   ↓
-docker run
+Internet ──► DNS (*.apps.<domain>) ──► Caddy :443 ──► <project> container
 ```
 
-Initially, we can deploy locally without Kubernetes.
+- [ ] Caddy reverse proxy in front of the API, frontend, and deployed apps
+- [ ] Each deployment gets `https://<project-slug>.apps.<domain>` instead of `localhost:<port>`; the worker updates the route on deploy (Caddy admin API or generated config)
+- [ ] Automatic TLS (Let's Encrypt). Wildcard certs need a DNS challenge — alternatively use on-demand TLS or a free `sslip.io`/`nip.io` hostname
+- [ ] Deployed app ports are no longer published on the host
 
-Tasks:
+### Must — Live build logs
 
-- [x] Create deployment job
-- [x] Clone GitHub repository
-- [x] Detect/build application (build only: a root Dockerfile is required; auto-detection deferred)
-- [x] Create Docker image
-- [x] Start container
-- [x] Assign port
-- [x] Verify health
-- [x] Store deployment URL
-- [x] Capture build logs
-- [x] Handle build failures
+- [ ] Worker publishes log lines to Redis pub/sub (and still stores the full log in PostgreSQL)
+- [ ] `GET /deployments/{id}/logs/stream` using Server-Sent Events
+- [ ] Frontend log viewer streams live, then falls back to stored logs; cap log size
+
+### Must — Observability
+
+- [ ] Structured JSON logs with `request_id` and `deployment_id` carried from API to worker (through the job payload)
+- [ ] `/health` (liveness) and `/ready` (DB + Redis reachable) endpoints
+- [ ] `/metrics` in Prometheus format: request count/latency, deployments by status, build duration, queue depth
+
+### Must — CI/CD and hosting
+
+- [ ] GitHub Actions: lint (ruff, eslint), backend tests with Postgres + Redis service containers, frontend build, Docker image build
+- [ ] Production `compose.prod.yaml`: API, worker(s), frontend (static build served by Caddy), PostgreSQL, Redis, Caddy; secrets from env, not committed
+- [ ] Deploy to a VPS / cloud VM; database backups (daily `pg_dump`)
+- [ ] One end-to-end test: create project → deploy sample repo → URL returns 200
+
+### Must — Documentation (the resume part)
+
+- [ ] `README.md`: what it is, screenshot/GIF, architecture diagram, how to run locally, live demo link
+- [ ] `docs/ARCHITECTURE.md`: components, deployment flow, state machine, queue semantics, scaling story
+- [ ] `docs/SECURITY.md` (from Phase 6)
+- [ ] Short demo video
+- [ ] Resume bullets written (Section 13)
+
+### Stretch
+
+- [ ] Prometheus + Grafana dashboard (only if RAM allows)
+- [ ] Rollback: redeploy a previous successful image
+- [ ] Deploy-on-merge for Syphership itself from GitHub Actions
+
+**Done when:** a stranger can open the live site, sign in, deploy a sample repo, and get a working HTTPS URL.
 
 ---
 
-# 10. Phase 5 — Redis Queue + Workers
-
-**Goal:** Learn asynchronous processing.
-
-Instead of:
-
-```text
-API → Build
-```
-
-we introduce:
-
-```text
-API
- ↓
-Redis Queue
- ↓
-Build Worker
-```
-
-Concepts to learn:
-
-- Producer
-- Consumer
-- Queue
-- Job
-- Worker
-- Retry
-- Timeout
-- Failure
-- Idempotency
-
-Tasks:
-
-- [ ] Create deployment queue
-- [ ] Create worker process
-- [ ] Publish deployment jobs
-- [ ] Consume deployment jobs
-- [ ] Update deployment state
-- [ ] Store worker logs
-- [ ] Implement retry
-- [ ] Handle failed jobs
-- [ ] Prevent duplicate jobs
-
----
-
-# 11. Phase 6 — Docker Registry
-
-**Goal:** Separate image building from image deployment.
-
-Flow:
-
-```text
-GitHub
- ↓
-Build Worker
- ↓
-docker build
- ↓
-Docker Image
- ↓
-Container Registry
- ↓
-Deploy Worker
-```
-
-Tasks:
-
-- [ ] Choose registry
-- [ ] Tag images
-- [ ] Push images
-- [ ] Store image reference
-- [ ] Pull image during deployment
-- [ ] Handle image build failure
-- [ ] Handle registry failure
-
-Local development may use a local registry.
-
----
-
-# 12. Phase 7 — Kubernetes
-
-**Goal:** Replace manually managed containers with Kubernetes.
-
-Start locally.
-
-Recommended options:
-
-- kind
-- k3d
-- Minikube
-
-For this project, keep the local Kubernetes environment lightweight.
-
-Architecture:
-
-```text
-Deploy Worker
-      ↓
-Kubernetes API
-      ↓
-Deployment
-      ↓
-ReplicaSet
-      ↓
-Pods
-      ↓
-Container
-```
-
-Tasks:
-
-- [ ] Learn Kubernetes fundamentals
-- [ ] Create Deployment
-- [ ] Create Service
-- [ ] Create ConfigMap
-- [ ] Create Secret
-- [ ] Configure resource limits
-- [ ] Configure readiness probe
-- [ ] Configure liveness probe
-- [ ] Deploy application programmatically
-- [ ] Read pod status
-- [ ] Detect failed deployment
-- [ ] Implement basic rollback
-
----
-
-# 13. Phase 8 — Live URLs and Ingress
-
-**Goal:** Make deployed applications accessible through URLs.
-
-Initial concept:
-
-```text
-myapp.syphership.local
-```
-
-Later:
-
-```text
-myapp.syphership.dev
-```
-
-Architecture:
-
-```text
-Internet
-   ↓
-DNS
-   ↓
-Ingress
-   ↓
-Kubernetes Service
-   ↓
-Pod
-```
-
-Tasks:
-
-- [ ] Learn DNS basics
-- [ ] Learn Kubernetes Ingress
-- [ ] Configure Ingress Controller
-- [ ] Route project subdomains
-- [ ] Implement generated deployment URLs
-- [ ] Configure HTTPS
-- [ ] Learn TLS certificates
-- [ ] Later support custom domains
-
----
-
-# 14. Phase 9 — Microservices
-
-**Important learning phase.**
-
-We now deliberately split the system.
-
-Initial services:
-
-```text
-Auth Service
-Project Service
-Deployment Service
-Build Service
-Deploy Service
-Notification Service
-```
-
-Each service should have:
-
-- [ ] Clear responsibility
-- [ ] Separate FastAPI application
-- [ ] Own configuration
-- [ ] Health endpoint
-- [ ] Logging
-- [ ] Error handling
-- [ ] Tests
-- [ ] Dockerfile
-
----
-
-# 15. Service Communication
-
-We need to learn two major communication models.
-
-## Synchronous Communication
-
-Example:
-
-```text
-Project Service
-      ↓ HTTP
-Deployment Service
-```
-
-Use when an immediate response is required.
-
-Learn:
-
-- REST
-- HTTP
-- Timeouts
-- Retries
-- Service discovery
-- Authentication between services
-
-## Asynchronous Communication
-
-Example:
-
-```text
-Deployment Service
-       ↓
-     Kafka
-       ↓
-   Build Service
-```
-
-Use when work can happen asynchronously.
-
-Learn:
-
-- Events
-- Topics
-- Producers
-- Consumers
-- Consumer groups
-- Partitions
-- Offsets
-- Retries
-- Dead-letter queues
-- Event ordering
-- Idempotency
-
----
-
-# 16. Phase 10 — Kafka
-
-**Goal:** Replace the simple Redis job queue with event-driven communication where appropriate.
-
-Example:
-
-```text
-Deployment Service
-       |
-       | DeploymentCreated
-       v
-     Kafka
-       |
-       +------------------+
-       |                  |
-       v                  v
- Build Worker       Notification Service
-       |
-       | BuildCompleted
-       v
-     Kafka
-       |
-       v
- Deploy Worker
-```
-
-Potential topics:
-
-```text
-deployment.created
-build.started
-build.completed
-build.failed
-deployment.started
-deployment.completed
-deployment.failed
-```
-
-Tasks:
-
-- [ ] Run Kafka locally
-- [ ] Understand broker
-- [ ] Create topics
-- [ ] Create producer
-- [ ] Create consumer
-- [ ] Consumer groups
-- [ ] Partitions
-- [ ] Offsets
-- [ ] Retries
-- [ ] Dead-letter handling
-- [ ] Idempotent consumers
-- [ ] Event schemas
-
----
-
-# 17. Phase 11 — GitHub Webhooks
-
-**Goal:** Automatic deployments.
-
-Target:
-
-```text
-Developer
-   ↓
-git push
-   ↓
-GitHub
-   ↓
-Webhook
-   ↓
-Syphership
-   ↓
-Deployment Event
-   ↓
-Build
-   ↓
-Deploy
-```
-
-Tasks:
-
-- [ ] Create webhook endpoint
-- [ ] Verify webhook signature
-- [ ] Process push events
-- [ ] Identify repository
-- [ ] Identify branch
-- [ ] Create deployment
-- [ ] Publish event
-- [ ] Build automatically
-- [ ] Deploy automatically
-
----
-
-# 18. Phase 12 — Deployment Logs
-
-**Goal:** Give developers useful build/deployment visibility.
-
-Example:
-
-```text
-$ git clone ...
-✓ Repository cloned
-
-$ docker build ...
-✓ Installing dependencies
-✓ Building application
-✓ Image created
-
-$ kubectl apply ...
-✓ Deployment created
-✓ Pod started
-✓ Health check passed
-
-Deployment successful.
-URL: https://example.syphership.dev
-```
-
-Tasks:
-
-- [ ] Capture worker logs
-- [ ] Store logs
-- [ ] Stream logs to frontend
-- [ ] Add deployment log viewer
-- [ ] Add timestamps
-- [ ] Add log levels
-- [ ] Handle large logs
-
----
-
-# 19. Phase 13 — Observability
-
-**Goal:** Understand what the distributed system is doing.
-
-Implement:
-
-- [ ] Structured logging
-- [ ] Request IDs
-- [ ] Deployment IDs
-- [ ] Health checks
-- [ ] Metrics
-- [ ] Prometheus
-- [ ] Grafana
-- [ ] OpenTelemetry
-- [ ] Distributed tracing
-
-We should be able to trace:
-
-```text
-HTTP Request
- ↓
-Deployment Service
- ↓
-Kafka Event
- ↓
-Build Worker
- ↓
-Docker Build
- ↓
-Kafka Event
- ↓
-Deploy Worker
- ↓
-Kubernetes
-```
-
-using a common correlation/trace ID.
-
----
-
-# 20. Phase 14 — Reliability
-
-**Goal:** Learn how distributed systems fail.
-
-Implement and test:
-
-- [ ] HTTP timeouts
-- [ ] Retries
-- [ ] Exponential backoff
-- [ ] Circuit breaker concepts
-- [ ] Idempotency
-- [ ] Duplicate event handling
-- [ ] Dead-letter queues
-- [ ] Job timeouts
-- [ ] Health checks
-- [ ] Graceful shutdown
-- [ ] Rollbacks
-
-Failure scenarios to simulate:
-
-```text
-Build worker crashes
-Kafka unavailable
-PostgreSQL unavailable
-Docker build fails
-Image registry unavailable
-Kubernetes pod crashes
-Deployment never becomes healthy
-Duplicate deployment event
-Worker processes same job twice
-```
-
----
-
-# 21. Phase 15 — Security
-
-Tasks:
-
-- [ ] Secure password hashing
-- [ ] JWT security
-- [ ] GitHub OAuth security
-- [ ] Webhook signature verification
-- [ ] Environment variable management
-- [ ] Secrets management
-- [ ] API rate limiting
-- [ ] Input validation
-- [ ] Authorization
-- [ ] Service-to-service authentication
-- [ ] Container isolation
-- [ ] Kubernetes security contexts
-- [ ] Resource limits
-- [ ] Prevent arbitrary host access
-- [ ] Never expose secrets in logs
-
----
-
-# 22. Phase 16 — Cloud Deployment
-
-Only after the local architecture works.
-
-Possible AWS architecture:
-
-```text
-                    Internet
-                       |
-                    Route 53
-                       |
-                  Load Balancer
-                       |
-                    Ingress
-                       |
-                      EKS
-             ┌─────────┴─────────┐
-             │                   │
-          Services             Pods
-             │
-       ┌─────┼─────┐
-       v     v     v
-      RDS   Redis  Kafka
-                    |
-                   ECR
-```
-
-Potential AWS services:
-
-- [ ] EKS
-- [ ] ECR
-- [ ] RDS PostgreSQL
-- [ ] S3
-- [ ] ElastiCache
-- [ ] Route 53
-- [ ] CloudWatch
-
-**Cost rule:** Avoid expensive managed infrastructure until it is actually needed.
-
----
-
-# 23. Phase 17 — Infrastructure as Code
-
-Later:
-
-- [ ] Terraform
-- [ ] Kubernetes manifests
-- [ ] Helm
-- [ ] Environment-specific configuration
-- [ ] Infrastructure documentation
-
-Target:
-
-```text
-Terraform
-   ↓
-AWS Infrastructure
-   ↓
-EKS
-   ↓
-Syphership
-```
-
----
-
-# 24. Phase 18 — CI/CD
-
-For Syphership itself:
-
-```text
-git push
-   ↓
-GitHub Actions
-   ↓
-Tests
-   ↓
-Build
-   ↓
-Docker Image
-   ↓
-Registry
-   ↓
-Deploy
-```
-
-Tasks:
-
-- [ ] Linting
-- [ ] Unit tests
-- [ ] Integration tests
-- [ ] Docker build
-- [ ] Image publishing
-- [ ] Deployment pipeline
-- [ ] Environment variables/secrets
-- [ ] Deployment rollback
-
----
-
-# 25. Phase 19 — Advanced PaaS Features
-
-Only after the core platform is reliable.
-
-Possible features:
-
-- [ ] Custom domains
-- [ ] Automatic HTTPS
-- [ ] Environment variables
-- [ ] Secrets
-- [ ] Deployment rollback
-- [ ] Multiple replicas
-- [ ] Horizontal Pod Autoscaling
-- [ ] Resource limits
-- [ ] Build caching
-- [ ] Deployment previews
-- [ ] Automatic redeployment
-- [ ] Project deletion
-- [ ] Build history
-- [ ] Runtime logs
-- [ ] Usage metrics
-- [ ] Team/project permissions
-- [ ] API keys
-
----
-
-# 26. Database Model
-
-Initial schema:
-
-```text
-users
-├── id
-├── email
-├── password_hash
-└── created_at
-
-projects
-├── id
-├── user_id
-├── name
-├── github_repo
-├── branch
-└── created_at
-
-deployments
-├── id
-├── project_id
-├── status
-├── commit_sha
-├── docker_image
-├── deployment_url
-├── created_at
-└── finished_at
-```
-
-Later tables may include:
-
-```text
-github_accounts
-deployment_logs
-environment_variables
-domains
-builds
-service_instances
-teams
-api_keys
-```
-
----
-
-# 27. Initial API
-
-## Authentication
-
-```http
-POST /auth/register
-POST /auth/login
-GET  /auth/me
-```
-
-## Projects
-
-```http
-GET    /projects
-POST   /projects
-GET    /projects/{id}
-PATCH  /projects/{id}
-DELETE /projects/{id}
-```
-
-## Deployments
-
-```http
-POST /projects/{id}/deploy
-GET  /projects/{id}/deployments
-GET  /deployments/{id}
-GET  /deployments/{id}/logs
-POST /deployments/{id}/rollback
-```
-
-## GitHub
-
-```http
-GET /github/repos
-GET /github/repos/{owner}/{repo}
-POST /github/webhook
-```
-
----
-
-# 28. Backend Structure — Initial
-
-```text
-backend/
-├── app/
-│   ├── main.py
-│   │
-│   ├── api/
-│   │   ├── auth.py
-│   │   ├── projects.py
-│   │   ├── deployments.py
-│   │   └── github.py
-│   │
-│   ├── models/
-│   │   ├── user.py
-│   │   ├── project.py
-│   │   └── deployment.py
-│   │
-│   ├── schemas/
-│   │   ├── auth.py
-│   │   ├── project.py
-│   │   └── deployment.py
-│   │
-│   ├── services/
-│   │   ├── auth_service.py
-│   │   ├── github_service.py
-│   │   └── deployment_service.py
-│   │
-│   ├── repositories/
-│   │   ├── user_repository.py
-│   │   ├── project_repository.py
-│   │   └── deployment_repository.py
-│   │
-│   ├── core/
-│   │   ├── config.py
-│   │   ├── security.py
-│   │   └── database.py
-│   │
-│   └── workers/
-│       └── ...
-│
-├── migrations/
-├── tests/
-├── Dockerfile
-├── requirements.txt
-└── .env.example
-```
-
-Later, services will become independently deployable applications.
-
----
-
-# 29. Frontend Structure
-
-```text
-frontend/
-├── app/
-│   ├── login/
-│   ├── register/
-│   ├── dashboard/
-│   ├── projects/
-│   │   └── [id]/
-│   └── settings/
-│
-├── components/
-│   ├── Navbar.tsx
-│   ├── ProjectCard.tsx
-│   ├── DeploymentStatus.tsx
-│   ├── DeploymentHistory.tsx
-│   ├── BuildLogs.tsx
-│   └── DeployButton.tsx
-│
-├── lib/
-│   └── api.ts
-│
-└── types/
-```
-
----
-
-# 30. Worker Structure
-
-Eventually:
-
-```text
-workers/
-├── build-worker/
-├── deploy-worker/
-└── notification-worker/
-```
-
-Each worker should be independently executable.
-
----
-
-# 31. Local Development
-
-The project should initially run locally.
-
-Target:
-
-```text
-Next.js
-FastAPI
-PostgreSQL
-Redis
-Docker
-Kubernetes
-```
-
-Use Docker Compose where practical.
-
-Because development hardware is limited, avoid running unnecessary infrastructure simultaneously.
-
-Kafka, Prometheus, Grafana, and Kubernetes should be introduced only when their learning objective becomes relevant.
-
----
-
-# 32. Testing Strategy
-
-## Unit Tests
-
-Test:
-
-- Authentication
-- Services
-- Business rules
-- Deployment state transitions
-- Event processing
-
-## Integration Tests
-
-Test:
-
-```text
-API → PostgreSQL
-API → Redis
-Service → Service
-Worker → Queue
-Worker → Docker
-Worker → Kubernetes
-```
-
-## End-to-End Test
-
-The most important E2E test:
-
-```text
-GitHub repository
-       ↓
-Create project
-       ↓
-Deploy
-       ↓
-Build
-       ↓
-Container
-       ↓
-Kubernetes
-       ↓
-Health check
-       ↓
-Live URL
-```
-
----
-
-# 33. Deployment State Machine
-
-A deployment must have controlled state transitions.
+# 6. Deployment State Machine
 
 ```text
               ┌───────────┐
               │  QUEUED   │
               └─────┬─────┘
-                    │
+                    │ worker claims job (conditional UPDATE)
                     v
               ┌───────────┐
               │ BUILDING  │
@@ -1248,248 +329,155 @@ A deployment must have controlled state transitions.
                 v       v
              FAILED  DEPLOYING
                         │
-                        v
-                    RUNNING
-                        │
-                     ┌──┴──┐
-                     v     v
-                  FAILED  STOPPED
+                    ┌───┴───┐
+                    v       v
+                 FAILED  RUNNING
+                            │ newer deployment of same project
+                            v
+                         STOPPED
 ```
 
-Invalid state transitions should be rejected.
+Invalid transitions are rejected. Workers only move a deployment forward from the state they claimed it in, which is what makes duplicate job delivery safe.
 
 ---
 
-# 34. Key System Design Questions
-
-Throughout development, we should be able to answer:
-
-### Architecture
-
-- Why FastAPI?
-- Why separate services?
-- When should a service communicate synchronously?
-- When should it publish an event?
-
-### Queues
-
-- Why Redis initially?
-- Why Kafka later?
-- What happens if a worker crashes?
-- How do we retry jobs?
-- How do we avoid duplicate processing?
-
-### Databases
-
-- Which service owns which data?
-- Should services share a database?
-- When should we introduce separate databases?
-
-### Kubernetes
-
-- Why Kubernetes?
-- What is a Pod?
-- What is a Deployment?
-- What is a Service?
-- What is Ingress?
-- How does Kubernetes restart failed containers?
-
-### Scalability
-
-- What happens when 1,000 users deploy simultaneously?
-- How do we scale Build Workers?
-- How do Kafka partitions help?
-- What becomes the bottleneck?
-
-### Reliability
-
-- What happens if PostgreSQL goes down?
-- What happens if Kafka goes down?
-- What happens if a deployment gets stuck?
-- How do we recover?
-
-### Security
-
-- Can one user's deployment access another user's deployment?
-- How do we protect GitHub credentials?
-- How do we isolate arbitrary user code?
-- How do we prevent resource abuse?
-
----
-
-# 35. Resume-Level Final Architecture
-
-The final project should be capable of honestly demonstrating:
+# 7. Database Model
 
 ```text
-Frontend
-   │
-Next.js + TypeScript
-   │
-   ▼
-API Gateway
-   │
-   ├── Auth Service
-   ├── Project Service
-   └── Deployment Service
-              │
-              ▼
-            Kafka
-              │
-       ┌──────┴──────┐
-       ▼             ▼
- Build Workers   Deploy Workers
-       │             │
-     Docker      Kubernetes
-       │             │
-       ▼             ▼
-      ECR           EKS
-                     │
-                     ▼
-                 Live Apps
+users            id, email, username, avatar_url, created_at
+oauth_accounts   id, user_id, provider, provider_user_id, access_token (→ encrypted, Phase 6)
+login_codes      code_hash, user_id, expires_at
+projects         id, user_id, name, description, created_at,
+                 repo_id, repo_full_name, repo_branch, repo_clone_url, repo_html_url, repo_private
+deployments      id, project_id, status, commit_sha, container_id, host_port, url,
+                 failure_reason, build_logs, created_at, updated_at
 ```
 
-Supporting infrastructure:
+Added in Phases 5–7:
 
 ```text
-PostgreSQL
-Redis
-Kafka
-Docker
-Kubernetes
-Prometheus
-Grafana
-OpenTelemetry
-GitHub
-AWS
-Terraform
-GitHub Actions
+deployments      + attempts, image_tag, started_at, finished_at
+projects         + slug, auto_deploy
+project_env_vars id, project_id, key, value_encrypted, created_at
 ```
 
-Only technologies actually implemented and understood should appear on the final resume.
+---
+
+# 8. API
+
+```http
+# Auth
+GET  /github/login            GET /github/callback       POST /github/connect
+GET  /google/login            GET /google/callback
+POST /auth/exchange           POST /auth/refresh         GET  /auth/me
+
+# GitHub
+GET  /github/repos
+GET  /github/repos/{owner}/{repo}/branches
+POST /github/webhook                         # Phase 6
+
+# Projects
+GET /projects   POST /projects   GET /projects/{id}   PUT /projects/{id}   DELETE /projects/{id}
+GET/PUT/DELETE  /projects/{id}/env           # Phase 6
+
+# Deployments
+POST   /deployments
+GET    /deployments
+GET    /deployments/{id}
+GET    /deployments/{id}/logs
+GET    /deployments/{id}/logs/stream         # Phase 7 (SSE)
+DELETE /deployments/{id}
+
+# Operations
+GET /health   GET /ready   GET /metrics      # Phase 7
+```
 
 ---
 
-# 36. MVP Definition
+# 9. Post-Launch Backlog (not part of the deadline)
 
-The MVP is **NOT**:
+Learned topics to pick up after launch, in a sensible order. Each one is a strong interview talking point *only once actually built*.
 
-- Kafka
-- AWS
-- Terraform
-- Prometheus
-- Grafana
-- Custom domains
-- Autoscaling
-- Multi-region deployment
-- Payments
-- Service mesh
-
-The MVP is:
-
-> **A user connects a GitHub repository, clicks Deploy, and Syphership builds and deploys the application and provides a working URL.**
-
-Everything else supports the evolution of that capability.
+1. **Container registry** — push images to a registry (local `registry:2`, GHCR, or ECR) so build and run can happen on different machines.
+2. **Kubernetes (k3d/kind)** — replace `docker run` with Deployments, Services, Ingress, readiness/liveness probes, HPA.
+3. **Kafka** — replace Redis Streams with topics (`deployment.created`, `build.completed`, …) when multiple independent consumers need the same events.
+4. **Split services** — separate build service and notification service once there is a real reason (independent scaling or ownership).
+5. **Cloud + IaC** — Terraform for a cloud setup (EKS/ECR/RDS) — watch costs.
+6. **PaaS features** — custom domains, preview deployments per PR, build caching, Dockerfile auto-detection/buildpacks, runtime logs, teams, API keys.
+7. **Full observability** — OpenTelemetry tracing across API → queue → worker, Grafana dashboards.
 
 ---
 
-# 37. Definition of Done
+# 10. Testing Strategy
 
-A feature is considered complete when:
+- **Unit:** auth, state transitions, webhook signature verification, log scrubbing, rate limiter, input validation.
+- **Integration:** API ↔ PostgreSQL, API → Redis Stream → worker, worker → Docker (marked slow).
+- **Security:** IDOR tests across users, forged webhook rejected, secrets absent from logs, deployed app cannot reach internal services.
+- **End-to-end:** sample repo → project → deploy → build → run → health check → HTTPS URL returns 200.
 
-- [ ] It works locally.
-- [ ] The implementation is understood.
-- [ ] Errors are handled.
-- [ ] Relevant tests exist.
-- [ ] Logs are available where appropriate.
+---
+
+# 11. Key System Design Questions (be ready to answer)
+
+**Architecture**
+- Why one API + workers instead of microservices? What would trigger a split?
+- Why is the API stateless, and why does that matter for scaling?
+
+**Queues**
+- What happens if a worker crashes mid-build? (pending entries + `XAUTOCLAIM`)
+- How do we avoid running a deployment twice? (at-least-once delivery + idempotent conditional claim)
+- Which failures are retried and which are not? What is the DLQ for?
+- When would Kafka be a better choice than Redis Streams?
+
+**Scalability**
+- What happens when 1,000 users click Deploy at once? (queue absorbs bursts, workers scale horizontally, per-user limits keep it fair)
+- What is the bottleneck? (Docker build CPU/disk on the worker host → next step is a registry + multiple build hosts / Kubernetes)
+
+**Reliability**
+- What happens if PostgreSQL or Redis goes down?
+- What happens if a deployment never becomes healthy?
+
+**Security**
+- Can one user's app reach another user's app, or our database? (separate network, no socket, dropped capabilities)
+- How are GitHub tokens and env vars protected? (encrypted at rest, scrubbed from logs)
+- How do we know a webhook really came from GitHub? (HMAC + delivery-ID dedupe)
+- Why is the Docker socket dangerous, and who can access it?
+
+---
+
+# 12. Definition of Done
+
+A feature is complete when:
+
+- [ ] It works locally and in production.
+- [ ] Errors are handled and logged with context.
+- [ ] Relevant tests exist and pass in CI.
 - [ ] Configuration is documented.
-- [ ] The architecture is documented.
-- [ ] The feature can be explained in an interview.
+- [ ] It can be explained in an interview.
 
 ---
 
-# 38. Current Priority
+# 13. Resume Summary (target, true after Phase 7)
 
-We should NOT jump directly into microservices.
+**Syphership — self-hosted deployment platform (mini PaaS)**
+*FastAPI, PostgreSQL, Redis Streams, Docker, React, Caddy, GitHub Actions*
 
-Our immediate sequence is:
+- Built a PaaS that deploys GitHub repositories to HTTPS subdomains on `git push`, using GitHub OAuth, HMAC-verified webhooks, and a Docker-based build pipeline.
+- Designed an at-least-once job pipeline on Redis Streams consumer groups with idempotent workers, exponential-backoff retries, a dead-letter queue, and crash recovery; scaled builds horizontally across worker replicas.
+- Sandboxed untrusted user code (non-root, dropped capabilities, resource limits, isolated network) and encrypted OAuth tokens and environment secrets at rest; added Redis rate limiting and cross-tenant authorization tests.
+- Streamed live build logs to the dashboard via Server-Sent Events; added structured logs with request/deployment IDs, Prometheus metrics, and CI with GitHub Actions.
 
-```text
-1. Project foundation
-        ↓
-2. FastAPI backend
-        ↓
-3. PostgreSQL
-        ↓
-4. Authentication
-        ↓
-5. Projects
-        ↓
-6. Deployments
-        ↓
-7. Next.js dashboard
-        ↓
-8. GitHub integration
-        ↓
-9. First local deployment
-        ↓
-10. Redis + Build Worker
-        ↓
-11. Docker Registry
-        ↓
-12. Kubernetes
-        ↓
-13. Microservices
-        ↓
-14. Kafka
-        ↓
-15. Cloud
-```
-
----
-
-# 39. Project Philosophy
-
-Syphership is both a product and a learning project.
-
-We are intentionally going to encounter the problems that distributed systems create.
-
-The objective is not:
-
-> "Use as many technologies as possible."
-
-The objective is:
-
-> **Build a real deployment platform and understand every layer well enough to design, debug, scale, and defend the architecture in an interview.**
+Only list what is actually implemented and understood.
 
 ---
 
 ## Current Status
 
-**Project:** Syphership  
-**Status:** Planning  
-**Backend:** FastAPI  
-**Frontend:** Next.js + TypeScript  
-**Database:** PostgreSQL  
-**Initial Queue:** Redis  
-**Future Messaging:** Kafka  
-**Containers:** Docker  
-**Orchestration:** Kubernetes  
-**Cloud:** AWS — later
-
-### Current milestone
-
-**Phase 0 — Project Foundation**
-
-- [ ] Create repository
-- [ ] Create directory structure
-- [ ] Initialize backend
-- [ ] Initialize frontend
-- [ ] Configure PostgreSQL
-- [ ] Configure Redis
-- [ ] Configure Docker
-- [ ] Run the complete local development environment
+**Phase:** 5 — Redis Queue + Scalable Workers (started 2026-10-17)
+**Done:** Phases 0–4
+**Next:** Phase 6 — Security Hardening + Push-to-Deploy (Oct 22)
+**Launch target:** 2026-10-31
 
 ---
 
-**Last updated:** 2026-09-12
+**Last updated:** 2026-10-17
