@@ -159,6 +159,7 @@ def test_failed_build_stores_build_logs(make_user, pipeline, monkeypatch):
     assert deployment.status == DeploymentStatus.FAILED
     assert deployment.failure_reason == "Docker build failed. See the build logs for details."
     assert "npm ERR! missing script: build" in deployment.build_logs
+    assert deployment.failed_stage == DeploymentStatus.BUILDING
     assert "run" not in pipeline["calls"]
 
 

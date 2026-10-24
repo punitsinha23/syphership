@@ -188,7 +188,7 @@ Concepts to learn: producer, consumer, consumer group, ack, at-least-once delive
 
 ### Must
 
-- [ ] Fix leftover bugs first: naive vs aware timestamps, timeline on FAILED, remove stray `mui` package and stale `src/pages/DeploymentDetails.jsx`
+- [x] Fix leftover bugs first: naive vs aware timestamps, timeline on FAILED, remove stray `mui` package and stale `src/pages/DeploymentDetails.jsx`
 - [ ] `worker/` entrypoint (`python -m worker`) that reuses the existing `deployment_runner`
 - [ ] API publishes a job (`deployment_id` only) **after** the DB commit; `BackgroundTasks` removed
 - [ ] Worker consumes with `XREADGROUP`, `XACK`s only after the deployment reaches a final state

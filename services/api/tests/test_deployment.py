@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 
@@ -79,6 +81,16 @@ def test_create_deployment(client, auth_headers, project_id):
     assert "id" in data
 
 
+def test_deployment_timestamps_include_timezone(client, auth_headers, project_id):
+    deployment_id = deploy(client, auth_headers, project_id).json()["id"]
+
+    data = client.get(f"/deployments/{deployment_id}", headers=auth_headers).json()
+
+    # Naive timestamps would be read as local time by the browser.
+    for field in ("created_at", "updated_at"):
+        assert datetime.fromisoformat(data[field]).utcoffset() == timedelta(0)
+
+
 def test_deployment_uses_latest_commit_of_project_branch(client, auth_headers, project_id, fake_latest_commit):
     deploy(client, auth_headers, project_id)
 
@@ -136,6 +148,7 @@ def test_deployment_can_fail():
 
     assert deployment.status == DeploymentStatus.FAILED
     assert deployment.failure_reason == "Build failed"
+    assert deployment.failed_stage == DeploymentStatus.BUILDING
 
 
 def test_status_cannot_be_set_through_api(client, auth_headers, project_id):

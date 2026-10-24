@@ -10,19 +10,21 @@ const stages = [
 function stepState(index, currentIndex, status) {
   // A stopped deployment ran successfully before it was replaced
   if (status === "RUNNING" || status === "STOPPED" || index < currentIndex) return "done";
-  if (index === currentIndex) return "active";
+  if (index === currentIndex) return status === "FAILED" ? "error" : "active";
   return "pending";
 }
 
-export default function DeploymentTimeline({ status }) {
+export default function DeploymentTimeline({ status, failedStage }) {
   const isFailed = status === "FAILED";
-  const currentIndex = stages.findIndex((stage) => stage.key === status);
+  // A failed deployment is positioned at the stage it failed in
+  const currentIndex = stages.findIndex((stage) => stage.key === (isFailed ? failedStage : status));
+  // Deployments that failed before failed_stage existed have no known stage
+  const stageUnknown = isFailed && currentIndex === -1;
 
   return (
     <ol className={`pipeline ${isFailed ? "pipeline-failed" : ""}`}>
       {stages.map((stage, index) => {
-        // The API doesn't record which stage a failed deployment reached
-        const state = isFailed ? "unknown" : stepState(index, currentIndex, status);
+        const state = stageUnknown ? "unknown" : stepState(index, currentIndex, status);
 
         return (
           <li key={stage.key} className={`pipeline-step pipeline-step-${state}`}>
@@ -32,17 +34,22 @@ export default function DeploymentTimeline({ status }) {
                   <path d="M5 12l5 5 9-10" />
                 </svg>
               )}
+              {state === "error" && (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              )}
             </span>
             <span className="pipeline-index">0{index + 1}</span>
             <span className="pipeline-label">{stage.label}</span>
             <span className="pipeline-hint">
-              {state === "active" ? "In progress" : stage.hint}
+              {state === "active" ? "In progress" : state === "error" ? "Failed here" : stage.hint}
             </span>
           </li>
         );
       })}
 
-      {isFailed && (
+      {stageUnknown && (
         <li className="pipeline-step pipeline-step-error">
           <span className="pipeline-node" aria-hidden="true">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round">

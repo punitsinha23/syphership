@@ -39,13 +39,15 @@ class Deployment(Base):
     url = Column(String, nullable=True)
 
     created_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
     )
     updated_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
     failure_reason = Column(String)
+    # Status the deployment was in when it failed, so the UI can show the failed stage.
+    failed_stage = Column(SQLEnum(DeploymentStatus), nullable=True)
     build_logs = Column(Text, nullable=True)

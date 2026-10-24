@@ -1,5 +1,5 @@
-// The API stores UTC but serializes naive datetimes (no "Z"), which the browser
-// would otherwise read as local time.
+// The API sends timezone-aware UTC timestamps; values without a zone (older
+// responses) are treated as UTC rather than the browser's local time.
 export function parseApiDate(value) {
     if (!value) return null
     const hasZone = /[zZ]|[+-]\d\d:?\d\d$/.test(value)

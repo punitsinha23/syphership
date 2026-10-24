@@ -15,6 +15,7 @@ class DeploymentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     failure_reason: str | None
+    failed_stage: DeploymentStatus | None
 
 class DeploymentLogsResponse(BaseModel):
     id: int

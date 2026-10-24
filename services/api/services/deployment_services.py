@@ -31,9 +31,11 @@ def update_deployment_status(deployment, new_status: DeploymentStatus, failure_r
     if new_status not in ALLOWED_TRANSITIONS[deployment.status]:
         raise ValueError('Invalid deployment status transition')
 
-    deployment.status = new_status
     if new_status == DeploymentStatus.FAILED:
+        deployment.failed_stage = deployment.status
         deployment.failure_reason = failure_reason
+
+    deployment.status = new_status
 
 
 def save_container_id(deployment, container_id:str) -> None:

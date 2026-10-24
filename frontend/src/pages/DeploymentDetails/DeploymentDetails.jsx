@@ -183,7 +183,7 @@ function DeploymentDetails() {
                             <div className="section-header">
                                 <h2 className="section-title">Pipeline</h2>
                             </div>
-                            <DeploymentTimeline status={d.status} />
+                            <DeploymentTimeline status={d.status} failedStage={d.failed_stage} />
                         </section>
 
                         <section className="section card deployment-info" aria-label="Details">
