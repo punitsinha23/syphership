@@ -28,3 +28,4 @@ pytest
 httpx
 alembic
 GitPython==3.2.0
+redis

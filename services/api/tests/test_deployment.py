@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 import pytest
+import redis
 from sqlalchemy.exc import IntegrityError
 
 import routes.deployments
@@ -30,11 +31,11 @@ def fake_latest_commit(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def fake_run_deployment(monkeypatch):
-    """Never run the real clone/build/run pipeline from API tests.
-    Records the deployment ids that were queued as background tasks."""
+def fake_publish(monkeypatch):
+    """Never publish to the real Redis queue from API tests.
+    Records the deployment ids that were published."""
     queued = []
-    monkeypatch.setattr(routes.deployments, "run_deployment", queued.append)
+    monkeypatch.setattr(routes.deployments, "publish", queued.append)
     return queued
 
 
@@ -206,13 +207,13 @@ def set_status(deployment_id, status):
         db.close()
 
 
-def test_cannot_deploy_while_deployment_in_progress(client, auth_headers, project_id, fake_run_deployment):
+def test_cannot_deploy_while_deployment_in_progress(client, auth_headers, project_id, fake_publish):
     first_id = deploy(client, auth_headers, project_id).json()["id"]
 
     response = deploy(client, auth_headers, project_id)
 
     assert response.status_code == 409
-    assert fake_run_deployment == [first_id]
+    assert fake_publish == [first_id]
 
 
 def test_can_deploy_after_previous_deployment_finished(client, auth_headers, project_id):
@@ -362,3 +363,25 @@ def test_deployment_kept_when_container_removal_fails(client, auth_headers, proj
 
     assert response.status_code == 502
     assert client.get(f"/deployments/{deployment_id}", headers=auth_headers).status_code == 200
+
+
+def test_deploy_fails_when_queue_is_down(client, auth_headers, project_id, monkeypatch, fake_publish):
+    def queue_down(deployment_id):
+        raise redis.exceptions.ConnectionError("Redis is down")
+
+    monkeypatch.setattr(routes.deployments, "publish", queue_down)
+
+    response = deploy(client, auth_headers, project_id)
+    assert response.status_code == 503
+
+    deployments = client.get(f"/deployments/?project_id={project_id}", headers=auth_headers).json()
+    assert len(deployments) == 1
+    assert deployments[0]["status"] == "FAILED"
+    assert "Deploy again" in deployments[0]["failure_reason"]
+
+
+    monkeypatch.setattr(routes.deployments, "publish", fake_publish.append)
+
+    response = deploy(client, auth_headers, project_id)
+    assert response.status_code == 200
+    assert fake_publish == [response.json()["id"]]

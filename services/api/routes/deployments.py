@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+import redis
 
 from database import get_db
 from models.deployment import Deployment, DeploymentStatus
@@ -11,9 +12,9 @@ from schemas.deployment import (
     DeploymentResponse,
 )
 from auth.dependencies import get_current_user
-from services.deployment_services import IN_PROGRESS_STATUSES
-from services.deployment_runner import run_deployment
+from services.deployment_services import IN_PROGRESS_STATUSES, update_deployment_status
 from services.docker_services import remove_deployment_resources
+from services.queue import publish
 from github.service import get_github_token, fetch_latest_commit
 
 
@@ -25,7 +26,6 @@ DEPLOYMENT_IN_PROGRESS = "A deployment of this project is already in progress."
 
 @router.post("/", response_model=DeploymentResponse)
 def create_deployment(
-    background_tasks : BackgroundTasks,
     deployment: DeploymentCreate,
     db: Session = Depends(get_db),
     user=Depends(get_current_user)
@@ -64,7 +64,6 @@ def create_deployment(
 
     db.add(new_deployment)
 
-    # The unique index catches two requests that both passed the check above.
     try:
         db.commit()
     except IntegrityError:
@@ -72,7 +71,17 @@ def create_deployment(
         raise HTTPException(status_code=409, detail=DEPLOYMENT_IN_PROGRESS) from None
 
     db.refresh(new_deployment)
-    background_tasks.add_task(run_deployment, new_deployment.id)
+    try:
+        publish(new_deployment.id)
+    except redis.exceptions.ConnectionError:
+        update_deployment_status(
+            new_deployment,
+            DeploymentStatus.FAILED,
+            "Build queue was unavailable. Deploy again.",
+        )
+        db.commit()
+        raise HTTPException(status_code=503, detail="Build queue is unavailable. Try again.") from None
+
     return new_deployment
 
 
