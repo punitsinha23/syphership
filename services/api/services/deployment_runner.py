@@ -12,7 +12,6 @@ from models.deployment import Deployment, DeploymentStatus
 from models.project import Project
 from models.user import User
 from services.deployment_services import (
-    IN_PROGRESS_STATUSES,
     update_deployment_status,
     save_container_id,
 )
@@ -127,34 +126,24 @@ def _mark_failed(
     return False
 
 
-def fail_interrupted_deployments(db) -> int:
-    """Mark deployments left in progress by a previous process as failed.
+def claim_deployment(db, deployment_id: int) -> bool:
+    """Move a queued deployment to BUILDING; False if it isn't queued anymore.
 
-    Builds run inside the API process (BackgroundTasks), so at startup none of
-    them can still be running. Revisit this once builds move to a worker.
-    Returns how many deployments were marked as failed."""
+    Check and update happen in one UPDATE, so when two workers get the same
+    job, only one of them can claim it."""
 
-    interrupted = (
+    claimed = (
         db.query(Deployment)
-        .filter(Deployment.status.in_(IN_PROGRESS_STATUSES))
-        .all()
-    )
-    interrupted_ids = [deployment.id for deployment in interrupted]
-
-    for deployment in interrupted:
-        update_deployment_status(
-            deployment,
-            DeploymentStatus.FAILED,
-            "Deployment was interrupted by a server restart. Deploy again.",
+        .filter(
+            Deployment.id == deployment_id,
+            Deployment.status == DeploymentStatus.QUEUED,
         )
+        .update({Deployment.status: DeploymentStatus.BUILDING})
+    )
 
+    # Commit right away so other workers see the claim.
     db.commit()
-
-    for deployment_id in interrupted_ids:
-        logger.warning("Deployment %s was interrupted; marked as failed.", deployment_id)
-        _remove_resources(deployment_id)
-
-    return len(interrupted_ids)
+    return claimed == 1
 
 
 def run_deployment(deployment_id: int) -> None:
@@ -174,10 +163,10 @@ def run_deployment(deployment_id: int) -> None:
             logger.error("Deployment %s was not found.", deployment_id)
             return
 
-        # Prevent rerunning deployments that are no longer queued.
-        if deployment.status != DeploymentStatus.QUEUED:
+        # 1. Claim it (QUEUED -> BUILDING); a job delivered twice is skipped here.
+        if not claim_deployment(db, deployment_id):
             logger.warning(
-                "Deployment %s is not queued; skipping.",
+                "Deployment %s was already claimed or finished; skipping.",
                 deployment_id,
             )
             return
@@ -230,13 +219,6 @@ def run_deployment(deployment_id: int) -> None:
                     "GitHub account is not connected. "
                     "Reconnect GitHub and deploy again."
                 ) from None
-
-            # 1. QUEUED -> BUILDING
-            update_deployment_status(
-                deployment,
-                DeploymentStatus.BUILDING,
-            )
-            db.commit()
 
             # Remove leftovers with this deployment's name (e.g. after a DB reset),
             # otherwise "docker run --name" fails.
