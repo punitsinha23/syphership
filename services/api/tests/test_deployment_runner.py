@@ -261,6 +261,46 @@ def test_deployment_can_only_be_claimed_once(make_user):
     assert get_deployment(deployment_id).status == DeploymentStatus.BUILDING
 
 
+def test_recovered_building_deployment_is_failed(make_user, pipeline):
+    # The worker died mid-build; the job was taken over by another worker.
+    deployment_id = create_queued_deployment(make_user, status=DeploymentStatus.BUILDING)
+
+    runner.recover_deployment(deployment_id)
+
+    deployment = get_deployment(deployment_id)
+    assert deployment.status == DeploymentStatus.FAILED
+    assert deployment.failed_stage == DeploymentStatus.BUILDING
+    assert "worker stopped unexpectedly" in deployment.failure_reason
+    assert pipeline["removed"] == [deployment_id]
+    assert pipeline["calls"] == []
+
+
+def test_recovered_queued_deployment_is_built(make_user, pipeline):
+    # The worker died before claiming it, so nothing was started yet.
+    deployment_id = create_queued_deployment(make_user)
+
+    runner.recover_deployment(deployment_id)
+
+    assert get_deployment(deployment_id).status == DeploymentStatus.RUNNING
+
+
+def test_recovered_finished_deployment_is_left_alone(make_user, pipeline):
+    # The worker finished but died before acking.
+    deployment_id = create_queued_deployment(make_user, status=DeploymentStatus.RUNNING)
+
+    runner.recover_deployment(deployment_id)
+
+    assert get_deployment(deployment_id).status == DeploymentStatus.RUNNING
+    assert pipeline["calls"] == []
+    assert pipeline["removed"] == []
+
+
+def test_recovering_missing_deployment_does_nothing(pipeline):
+    runner.recover_deployment(999999)
+
+    assert pipeline["calls"] == []
+
+
 def test_missing_deployment_does_nothing(pipeline):
     runner.run_deployment(999999)
 

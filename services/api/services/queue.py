@@ -9,13 +9,16 @@ load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 STREAM = "deployments"
 GROUP = "builders"
 DEAD_STREAM = "deployments:dead"
+# Must be longer than the slowest deployment (docker build alone can take 10 min).
+RECLAIM_IDLE_MS = 15 * 60 * 1000
 
 
 redis_client = redis.Redis(
     host=os.getenv("REDIS_HOST", "localhost"),
     port=int(os.getenv("REDIS_PORT", "6379")),
     decode_responses=True,
-    socket_timeout=10
+    # Must be longer than the worker's xreadgroup block time, or reads time out.
+    socket_timeout=10,
 )
 
 

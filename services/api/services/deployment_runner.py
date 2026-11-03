@@ -1,4 +1,3 @@
-
 from pathlib import Path
 import logging
 import os
@@ -329,3 +328,41 @@ def run_deployment(deployment_id: int) -> None:
         # Clean up source files after the build process.
         if repository_path is not None:
             shutil.rmtree(repository_path, ignore_errors=True)
+
+
+def recover_deployment(deployment_id: int) -> None:
+    """Handle a job taken over from a worker that died.
+
+    BUILDING/DEPLOYING means it died mid-job: fail it and clean up. Anything
+    else goes to run_deployment, which builds QUEUED and skips the rest."""
+
+    db = SessionLocal()
+
+    try:
+        deployment = (
+            db.query(Deployment)
+            .filter(Deployment.id == deployment_id)
+            .first()
+        )
+
+        if deployment is None:
+            logger.warning("Deployment %s was not found during recovery.", deployment_id)
+            return
+
+        if deployment.status in (
+            DeploymentStatus.BUILDING,
+            DeploymentStatus.DEPLOYING,
+        ):
+            if _mark_failed(
+                db,
+                deployment_id,
+                "The build worker stopped unexpectedly. Deploy again.",
+            ):
+                _remove_resources(deployment_id)
+            return
+
+    finally:
+        db.close()
+
+    # Outside the try so this session is closed before run_deployment opens its own.
+    run_deployment(deployment_id)
