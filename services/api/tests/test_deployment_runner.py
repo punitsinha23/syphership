@@ -301,6 +301,26 @@ def test_recovering_missing_deployment_does_nothing(pipeline):
     assert pipeline["calls"] == []
 
 
+def test_dead_lettered_deployment_is_failed(make_user, pipeline):
+    deployment_id = create_queued_deployment(make_user)
+
+    runner.fail_dead_lettered(deployment_id)
+
+    deployment = get_deployment(deployment_id)
+    assert deployment.status == DeploymentStatus.FAILED
+    assert "kept failing" in deployment.failure_reason
+    assert pipeline["removed"] == [deployment_id]
+
+
+def test_dead_lettered_finished_deployment_is_left_alone(make_user, pipeline):
+    deployment_id = create_queued_deployment(make_user, status=DeploymentStatus.RUNNING)
+
+    runner.fail_dead_lettered(deployment_id)
+
+    assert get_deployment(deployment_id).status == DeploymentStatus.RUNNING
+    assert pipeline["removed"] == []
+
+
 def test_missing_deployment_does_nothing(pipeline):
     runner.run_deployment(999999)
 

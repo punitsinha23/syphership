@@ -167,7 +167,7 @@ Rule: if a phase runs over its dates, cut its **Stretch** tasks — do not push 
 
 ---
 
-## Phase 5 — Redis Queue + Scalable Workers ⏳
+## Phase 5 — Redis Queue + Scalable Workers ✅
 
 **Dates:** Oct 17 – Oct 21
 
@@ -189,17 +189,18 @@ Concepts to learn: producer, consumer, consumer group, ack, at-least-once delive
 ### Must
 
 - [x] Fix leftover bugs first: naive vs aware timestamps, timeline on FAILED, remove stray `mui` package and stale `src/pages/DeploymentDetails.jsx`
-- [ ] `worker/` entrypoint (`python -m worker`) that reuses the existing `deployment_runner`
-- [ ] API publishes a job (`deployment_id` only) **after** the DB commit; `BackgroundTasks` removed
-- [ ] Worker consumes with `XREADGROUP`, `XACK`s only after the deployment reaches a final state
-- [ ] Idempotency: worker claims a job with a conditional update (`UPDATE ... SET status='BUILDING' WHERE id=? AND status='QUEUED'`); if 0 rows change, skip — duplicate deliveries are harmless
-- [ ] Retries for transient errors (Docker daemon / network) with exponential backoff and a max attempt count; build errors in the user's code are **not** retried
-- [ ] Dead-letter stream for jobs that exceed max attempts; deployment marked FAILED with a reason
-- [ ] Stuck-job recovery with `XAUTOCLAIM` (replaces the startup "mark interrupted as FAILED" cleanup)
-- [ ] Build timeout (e.g. 10 min) enforced by the worker
-- [ ] Graceful shutdown: on SIGTERM finish or release the current job, don't take new ones
-- [ ] Worker as its own service in `compose.yaml`; run `docker compose up --scale worker=2` and show two deployments building in parallel
-- [ ] Tests: publish → consume → state change; duplicate job is skipped; failed job lands in DLQ
+- [x] `worker/` entrypoint (`python -m worker`) that reuses the existing `deployment_runner`
+- [x] API publishes a job (`deployment_id` only) **after** the DB commit; `BackgroundTasks` removed
+- [x] Worker consumes with `XREADGROUP`, `XACK`s only after the deployment reaches a final state
+- [x] Idempotency: worker claims a job with a conditional update (`UPDATE ... SET status='BUILDING' WHERE id=? AND status='QUEUED'`); if 0 rows change, skip — duplicate deliveries are harmless
+- [x] Dead-letter stream for jobs that exceed max attempts (`MAX_DELIVERIES`) or are malformed; deployment marked FAILED with a reason
+- [x] Stuck-job recovery with `XAUTOCLAIM` (replaces the startup "mark interrupted as FAILED" cleanup); a job abandoned mid-build is failed cleanly, a job abandoned while QUEUED is built
+- [x] Build timeout: `docker build` 10 min, plus per-step timeouts for run, inspect and health check
+- [x] Graceful shutdown: on SIGTERM/SIGINT finish the current job, don't take new ones; `stop_grace_period: 15m` in compose
+- [x] Worker as its own service in `compose.yaml` (profile `workers`); `docker compose --profile workers up --build --scale worker=2` processes two deployments in parallel
+- [x] Redis persistence (`--appendonly yes` + volume) so queued jobs and acks survive a Redis restart
+- [x] Tests: publish → consume → ack; duplicate claim is skipped; recovery paths; malformed and over-delivered jobs land in the DLQ
+- Moved to backlog: retries for transient errors with exponential backoff (most failures are in the user's code and would fail again)
 
 ### Stretch
 
@@ -405,6 +406,7 @@ Learned topics to pick up after launch, in a sensible order. Each one is a stron
 5. **Cloud + IaC** — Terraform for a cloud setup (EKS/ECR/RDS) — watch costs.
 6. **PaaS features** — custom domains, preview deployments per PR, build caching, Dockerfile auto-detection/buildpacks, runtime logs, teams, API keys.
 7. **Full observability** — OpenTelemetry tracing across API → queue → worker, Grafana dashboards.
+8. **Job retries** — retry transient failures (Docker daemon, network, GitHub) with exponential backoff and a max attempt count; never retry errors in the user's code.
 
 ---
 
@@ -463,7 +465,7 @@ A feature is complete when:
 *FastAPI, PostgreSQL, Redis Streams, Docker, React, Caddy, GitHub Actions*
 
 - Built a PaaS that deploys GitHub repositories to HTTPS subdomains on `git push`, using GitHub OAuth, HMAC-verified webhooks, and a Docker-based build pipeline.
-- Designed an at-least-once job pipeline on Redis Streams consumer groups with idempotent workers, exponential-backoff retries, a dead-letter queue, and crash recovery; scaled builds horizontally across worker replicas.
+- Designed an at-least-once job pipeline on Redis Streams consumer groups with idempotent workers, a dead-letter queue, crash recovery, and graceful shutdown; scaled builds horizontally across worker replicas.
 - Sandboxed untrusted user code (non-root, dropped capabilities, resource limits, isolated network) and encrypted OAuth tokens and environment secrets at rest; added Redis rate limiting and cross-tenant authorization tests.
 - Streamed live build logs to the dashboard via Server-Sent Events; added structured logs with request/deployment IDs, Prometheus metrics, and CI with GitHub Actions.
 
@@ -473,11 +475,11 @@ Only list what is actually implemented and understood.
 
 ## Current Status
 
-**Phase:** 5 — Redis Queue + Scalable Workers (started 2026-10-17)
-**Done:** Phases 0–4
-**Next:** Phase 6 — Security Hardening + Push-to-Deploy (Oct 22)
-**Launch target:** 2026-10-31
+**Phase:** 6 — Security Hardening + Push-to-Deploy
+**Done:** Phases 0–5 (Phase 5 finished 2026-11-03)
+**Next:** Phase 6
+**Launch target:** 2026-10-31 (passed; new date to be set)
 
 ---
 
-**Last updated:** 2026-10-17
+**Last updated:** 2026-11-03

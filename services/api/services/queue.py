@@ -11,6 +11,7 @@ GROUP = "builders"
 DEAD_STREAM = "deployments:dead"
 # Must be longer than the slowest deployment (docker build alone can take 10 min).
 RECLAIM_IDLE_MS = 15 * 60 * 1000
+MAX_DELIVERIES = 3
 
 
 redis_client = redis.Redis(
@@ -37,3 +38,17 @@ def publish(deployment_id: int) -> str:
     """Queue a deployment for the workers; returns the stream message ID."""
 
     return redis_client.xadd(STREAM, {"deployment_id": deployment_id})
+
+
+def delivery_count(message_id: str) -> int:
+    """How many times this pending message has been handed to a worker."""
+
+    res = redis_client.xpending_range(STREAM, GROUP, min=message_id, max=message_id, count=1)
+    return res[0]["times_delivered"]
+
+
+def dead_letters(message_id: str, fields: dict) -> None:
+    """Give up on a message: copy it to the dead stream and ack it."""
+
+    redis_client.xadd(DEAD_STREAM, fields)
+    redis_client.xack(STREAM, GROUP, message_id)

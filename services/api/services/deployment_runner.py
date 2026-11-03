@@ -364,5 +364,20 @@ def recover_deployment(deployment_id: int) -> None:
     finally:
         db.close()
 
-    # Outside the try so this session is closed before run_deployment opens its own.
     run_deployment(deployment_id)
+
+
+def fail_dead_lettered(deployment_id: int) -> None:
+    """Fail a deployment whose job was dead-lettered, and clean up its resources."""
+
+    db = SessionLocal()
+
+    try:
+        if _mark_failed(
+            db,
+            deployment_id,
+            "This deployment kept failing and was stopped. Deploy again.",
+        ):
+            _remove_resources(deployment_id)
+    finally:
+        db.close()
