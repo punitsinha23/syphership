@@ -13,8 +13,11 @@ from services.queue import (
     MAX_DELIVERIES,
     delivery_count,
     dead_letters,
+
 )
 from services.deployment_runner import run_deployment, recover_deployment, fail_dead_lettered
+from services.docker_services import ensure_network
+
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +107,7 @@ def main() -> None:
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
     ensure_group()
-
+    ensure_network()
     logger.info("Worker %s started.", CONSUMER)
     while not stopping:
         poll_once()

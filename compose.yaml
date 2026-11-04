@@ -16,7 +16,7 @@ services:
 
     ports:
 
-      - "${POSTGRES_PORT}:5432"
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
 
     volumes:
 
@@ -32,8 +32,9 @@ services:
     command: redis-server --appendonly yes
 
     ports:
+    # Localhost only: deployed apps can reach the host at 172.17.0.1, not 127.0.0.1.
 
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
     volumes:
 

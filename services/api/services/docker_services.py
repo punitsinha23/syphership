@@ -11,6 +11,10 @@ MAX_BUILD_LOG_CHARS = 100_000
 # Per-container limits so one app cannot starve the host or the other apps.
 CONTAINER_CPUS = os.getenv("DEPLOYMENT_CPUS", "0.5")
 CONTAINER_MEMORY = os.getenv("DEPLOYMENT_MEMORY", "256m")
+CONTAINER_PIDS_LIMIT = os.getenv("DEPLOYMENT_PIDS_LIMIT", "256")
+
+# User apps get their own network, away from the default one.
+DEPLOYMENT_NETWORK = os.getenv("DEPLOYMENT_NETWORK", "syphership-apps")
 
 
 def deployment_resource_name(deployment_id: int) -> str:
@@ -153,6 +157,16 @@ def run_docker_container(image_tag: str, deployment_id: int, container_port: int
                 # Same as --memory, so the container cannot use swap on top of it.
                 "--memory-swap",
                 CONTAINER_MEMORY,
+                # Root inside the container gets no extra powers and can't gain any.
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                # Stops fork bombs.
+                "--pids-limit",
+                CONTAINER_PIDS_LIMIT,
+                "--network",
+                DEPLOYMENT_NETWORK,
                 # Publish on localhost only; the empty host port lets Docker pick a free one.
                 "-p",
                 f"127.0.0.1::{container_port}",
@@ -305,3 +319,28 @@ def get_host_port(container_id: str, container_port:int) -> int:
         return int(port)
     except (IndexError, ValueError):
         raise RuntimeError("Could not read the host port from Docker.") from None
+
+def ensure_network() -> None:
+    res = subprocess.run([
+        "docker",
+        "network",
+        "inspect",
+        DEPLOYMENT_NETWORK,
+    ],
+    capture_output=True,
+    text=True,
+    timeout=30
+    )
+
+    if res.returncode != 0:
+        subprocess.run([
+            "docker",
+            "network",
+            "create",
+            DEPLOYMENT_NETWORK
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30
+        )
