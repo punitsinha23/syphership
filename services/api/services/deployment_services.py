@@ -1,4 +1,11 @@
-from models.deployment import DeploymentStatus
+import redis
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from models.deployment import Deployment, DeploymentStatus
+from models.project import Project
+from services.errors import DeploymentInProgress, QueueUnavailable
+from services.queue import publish
 
 ALLOWED_TRANSITIONS = {
     DeploymentStatus.QUEUED: [
@@ -44,3 +51,38 @@ def save_container_id(deployment, container_id:str) -> None:
 
 
     deployment.container_id = container_id.strip()
+
+
+def queue_deployment(db: Session, project: Project, commit_sha: str) -> Deployment:
+    """Create a QUEUED deployment and publish it to the build queue.
+
+    Raises DeploymentInProgress or QueueUnavailable."""
+
+    deployment = Deployment(
+        project_id=project.id,
+        commit_sha=commit_sha,
+        status=DeploymentStatus.QUEUED,
+    )
+    db.add(deployment)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        # The unique index allows one in-progress deployment per project.
+        db.rollback()
+        raise DeploymentInProgress("A deployment of this project is already in progress.") from None
+
+    db.refresh(deployment)
+
+    try:
+        publish(deployment.id)
+    except redis.exceptions.ConnectionError:
+        update_deployment_status(
+            deployment,
+            DeploymentStatus.FAILED,
+            "Build queue was unavailable. Deploy again.",
+        )
+        db.commit()
+        raise QueueUnavailable("Build queue is unavailable. Try again.") from None
+
+    return deployment

@@ -5,6 +5,7 @@ import redis
 from sqlalchemy.exc import IntegrityError
 
 import routes.deployments
+import services.deployment_services
 from auth.security import encrypt_secret
 from models.deployment import Deployment, DeploymentStatus
 from models.project import Project
@@ -35,7 +36,7 @@ def fake_publish(monkeypatch):
     """Never publish to the real Redis queue from API tests.
     Records the deployment ids that were published."""
     queued = []
-    monkeypatch.setattr(routes.deployments, "publish", queued.append)
+    monkeypatch.setattr(services.deployment_services, "publish", queued.append)
     return queued
 
 
@@ -369,7 +370,7 @@ def test_deploy_fails_when_queue_is_down(client, auth_headers, project_id, monke
     def queue_down(deployment_id):
         raise redis.exceptions.ConnectionError("Redis is down")
 
-    monkeypatch.setattr(routes.deployments, "publish", queue_down)
+    monkeypatch.setattr(services.deployment_services, "publish", queue_down)
 
     response = deploy(client, auth_headers, project_id)
     assert response.status_code == 503
@@ -380,7 +381,7 @@ def test_deploy_fails_when_queue_is_down(client, auth_headers, project_id, monke
     assert "Deploy again" in deployments[0]["failure_reason"]
 
 
-    monkeypatch.setattr(routes.deployments, "publish", fake_publish.append)
+    monkeypatch.setattr(services.deployment_services, "publish", fake_publish.append)
 
     response = deploy(client, auth_headers, project_id)
     assert response.status_code == 200

@@ -1,10 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-import redis
 
 from database import get_db
-from models.deployment import Deployment, DeploymentStatus
+from models.deployment import Deployment
 from models.project import Project
 from schemas.deployment import (
     DeploymentCreate,
@@ -12,9 +10,9 @@ from schemas.deployment import (
     DeploymentResponse,
 )
 from auth.dependencies import get_current_user
-from services.deployment_services import IN_PROGRESS_STATUSES, update_deployment_status
+from services.deployment_services import IN_PROGRESS_STATUSES, queue_deployment
 from services.docker_services import remove_deployment_resources
-from services.queue import publish
+from services.errors import DeploymentInProgress, QueueUnavailable
 from github.service import get_github_token, fetch_latest_commit
 
 
@@ -56,33 +54,12 @@ def create_deployment(
     token = get_github_token(db, user)
     commit_sha = fetch_latest_commit(token, project.repo_full_name, project.repo_branch)
 
-    new_deployment = Deployment(
-        project_id=project.id,
-        commit_sha=commit_sha,
-        status=DeploymentStatus.QUEUED
-    )
-
-    db.add(new_deployment)
-
     try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=409, detail=DEPLOYMENT_IN_PROGRESS) from None
-
-    db.refresh(new_deployment)
-    try:
-        publish(new_deployment.id)
-    except redis.exceptions.ConnectionError:
-        update_deployment_status(
-            new_deployment,
-            DeploymentStatus.FAILED,
-            "Build queue was unavailable. Deploy again.",
-        )
-        db.commit()
-        raise HTTPException(status_code=503, detail="Build queue is unavailable. Try again.") from None
-
-    return new_deployment
+        return queue_deployment(db, project, commit_sha)
+    except DeploymentInProgress as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+    except QueueUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from None
 
 
 @router.get("/", response_model=list[DeploymentResponse])

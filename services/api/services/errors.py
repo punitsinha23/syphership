@@ -8,3 +8,11 @@ class BuildError(DeploymentError):
     def __init__(self, message: str, logs: str):
         super().__init__(message)
         self.logs = logs
+
+
+class DeploymentInProgress(DeploymentError):
+    """The project already has a queued or running build."""
+
+
+class QueueUnavailable(DeploymentError):
+    """Redis could not be reached, so the deployment was marked FAILED."""
