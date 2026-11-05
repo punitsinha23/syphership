@@ -8,6 +8,7 @@ import os
 from git import GitCommandError, Repo
 
 from services.errors import DeploymentError
+from services.validation import is_valid_sha
 
 
 DEPLOYMENT_ROOT = Path(tempfile.gettempdir()) / "syphership-deployments"
@@ -23,7 +24,7 @@ def clone_repository(
     if not repo_url:
         raise ValueError("Repository URL is required.")
 
-    if not commit_sha or len(commit_sha) != 40:
+    if not is_valid_sha(commit_sha):
         raise ValueError("Invalid commit SHA.")
 
     if not isinstance(deployment_id, int) or deployment_id <= 0:

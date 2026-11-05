@@ -284,3 +284,13 @@ def test_push_returns_503_when_queue_is_down(client, delivery_ids, monkeypatch):
     assert response.status_code == 503
     [deployment] = deployments_of(project_id)
     assert deployment.status == DeploymentStatus.FAILED
+
+
+def test_push_with_invalid_sha_deploys_nothing(client, delivery_ids, published):
+    project_id = make_project()
+    body = json.dumps({"ref": "refs/heads/main", "after": "-" * 40, "repository": {"id": REPO_ID}}).encode()
+
+    response = send_push(client, delivery_ids(), body)
+
+    assert response.json()["deployments"] == []
+    assert deployments_of(project_id) == []

@@ -7,6 +7,7 @@ from fastapi import HTTPException
 import httpx
 
 from auth.oauth import OAuthError
+from services.validation import is_valid_branch
 
 
 SCOPES = "read:user user:email repo"
@@ -129,6 +130,9 @@ def fetch_repo_config(token: str, full_name: str, branch: str | None = None) -> 
 
     repo = github_get(f"/repos/{full_name}", token)
     branch = branch or repo["default_branch"]
+    if not is_valid_branch(branch):
+        raise HTTPException(status_code=422, detail="Invalid branch name.")
+
     # Branch names may contain "/", so encode it as one path segment
     github_get(f"/repos/{repo['full_name']}/branches/{quote(branch, safe='')}", token)
 

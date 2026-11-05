@@ -11,6 +11,7 @@ from models.project import Project
 from services.deployment_services import queue_deployment
 from services.errors import DeploymentInProgress
 from services.queue import redis_client
+from services.validation import is_valid_sha
 
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
@@ -46,6 +47,10 @@ def handle_push(db: Session, payload: dict) -> list[int]:
 
     # Tags arrive as refs/tags/...; only branches are deployed.
     if not ref.startswith("refs/heads/"):
+        return []
+
+    if not is_valid_sha(payload["after"]):
+        logger.warning("Ignored push with an invalid commit SHA.")
         return []
 
     branch = ref.removeprefix("refs/heads/")
