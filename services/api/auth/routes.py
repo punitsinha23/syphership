@@ -7,12 +7,13 @@ from schemas.user import CodeExchange, RefreshToken
 from auth.security import create_token, verify_token, create_session_tokens, ACCESS_TOKEN_TTL
 from auth.dependencies import get_current_user, get_user_by_sub
 from auth.oauth import redeem_login_code
+from services.rate_limit import limit_by_ip
 
 
 router = APIRouter(prefix="/auth")
 
 
-@router.post("/exchange")
+@router.post("/exchange", dependencies=[Depends(limit_by_ip("exchange", 10))])
 def exchange_login_code(body: CodeExchange, db: Session = Depends(get_db)):
     """Trade the one-time code from an OAuth callback for session tokens."""
     user_id = redeem_login_code(db, body.code)
@@ -42,7 +43,7 @@ def get_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)
         "github_connected": "github" in providers,
     }
 
-@router.post("/refresh")
+@router.post("/refresh", dependencies=[Depends(limit_by_ip("refresh", 30))])
 def refresh_token(refresh_token: RefreshToken, db: Session = Depends(get_db)):
     payload = verify_token(refresh_token.refresh_token , "refresh")
 

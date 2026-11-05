@@ -10,6 +10,7 @@ from auth.oauth import complete_oauth, connect_url_response, redirect_to_provide
 from github.service import get_github_auth_url, fetch_github_identity, get_github_token, github_get
 from github.webhook import handle_push, is_new_delivery, verify_signature
 from services.errors import QueueUnavailable
+from services.rate_limit import limit_by_ip
 
 
 router = APIRouter(prefix="/github", tags=["GitHub"])
@@ -59,7 +60,7 @@ def list_branches(owner: str, repo: str, user: User = Depends(get_current_user),
     return [b["name"] for b in branches]
 
 
-@router.post("/webhook")
+@router.post("/webhook", dependencies=[Depends(limit_by_ip("webhook", 60))])
 async def github_webhook(request: Request, db: Session = Depends(get_db)):
     """Called by GitHub, not a user: the signature replaces login."""
     # Raw bytes: GitHub signed exactly these, so don't parse them first.

@@ -386,3 +386,14 @@ def test_deploy_fails_when_queue_is_down(client, auth_headers, project_id, monke
     response = deploy(client, auth_headers, project_id)
     assert response.status_code == 200
     assert fake_publish == [response.json()["id"]]
+
+
+def test_deploys_are_limited_per_user(client, auth_headers, user2_headers, project_id):
+    # The 409s are fine: each attempt counts, whatever the result.
+    responses = [deploy(client, auth_headers, project_id).status_code for _ in range(6)]
+
+    assert 429 not in responses[:5]
+    assert responses[5] == 429
+
+    # Another user has their own counter (404: the project isn't theirs).
+    assert deploy(client, user2_headers, project_id).status_code == 404

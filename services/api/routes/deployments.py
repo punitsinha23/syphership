@@ -13,6 +13,7 @@ from auth.dependencies import get_current_user
 from services.deployment_services import IN_PROGRESS_STATUSES, queue_deployment
 from services.docker_services import remove_deployment_resources
 from services.errors import DeploymentInProgress, QueueUnavailable
+from services.rate_limit import limit_by_user
 from github.service import get_github_token, fetch_latest_commit
 
 
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/deployments")
 DEPLOYMENT_IN_PROGRESS = "A deployment of this project is already in progress."
 
 
-@router.post("/", response_model=DeploymentResponse)
+@router.post("/", response_model=DeploymentResponse, dependencies=[Depends(limit_by_user("deploy", 5))])
 def create_deployment(
     deployment: DeploymentCreate,
     db: Session = Depends(get_db),

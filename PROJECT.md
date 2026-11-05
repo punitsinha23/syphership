@@ -237,7 +237,7 @@ A PaaS runs strangers' code on your machine. This phase is what makes the projec
 
 - [x] Authorization tests: user A gets 404 on user B's projects, deployments, logs (IDOR)
 - [x] Validate repo names, branch names, and commit SHAs before they reach `git`/`docker` (no shell injection; never `shell=True`)
-- [ ] Rate limiting with Redis (fixed window or token bucket) on auth, deploy, and webhook endpoints
+- [x] Rate limiting with Redis (fixed window or token bucket) on auth, deploy, and webhook endpoints
 - [ ] Strict CORS origins, security headers, short-lived access tokens, refresh token rotation reviewed
 
 ### Must — Push-to-deploy (GitHub Webhooks)

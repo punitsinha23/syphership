@@ -11,6 +11,7 @@ from models.project import Project
 from models.deployment import Deployment
 from auth.security import create_session_tokens
 from main import app
+from services.queue import redis_client
 
 
 # Same server/credentials as the dev DB, separate "<db>_test" database
@@ -37,6 +38,14 @@ def setup_db():
     Base.metadata.create_all(bind=test_engine)
     yield
     Base.metadata.drop_all(bind=test_engine)
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    """Counters live in Redis, so they would carry over between tests."""
+    yield
+    for key in redis_client.scan_iter("ratelimit:*"):
+        redis_client.delete(key)
 
 
 @pytest.fixture
