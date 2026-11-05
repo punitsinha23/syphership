@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+import redis
 
 from database import get_db
 from models.deployment import Deployment
@@ -11,8 +12,8 @@ from schemas.deployment import (
 )
 from auth.dependencies import get_current_user
 from services.deployment_services import IN_PROGRESS_STATUSES, queue_deployment
-from services.docker_services import remove_deployment_resources
 from services.errors import DeploymentInProgress, QueueUnavailable
+from services.queue import publish_cleanup
 from services.rate_limit import limit_by_user
 from github.service import get_github_token, fetch_latest_commit
 
@@ -142,13 +143,13 @@ def delete_deployment(
             detail="Wait for this deployment to finish before deleting it."
         )
 
-    # Remove the container first so a failure never leaves it running unseen.
+    # Queue the removal first so a failure never leaves the container running unseen.
     try:
-        remove_deployment_resources(deployment_db.id)
-    except RuntimeError:
+        publish_cleanup(deployment_db.id)
+    except redis.exceptions.RedisError:
         raise HTTPException(
-            status_code=502,
-            detail="Could not remove the deployment's container. Try again."
+            status_code=503,
+            detail="Could not queue the container's removal. Try again."
         ) from None
 
     db.delete(deployment_db)

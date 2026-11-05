@@ -27,7 +27,7 @@ def jobs(monkeypatch):
     monkeypatch.setattr(worker, "RECLAIM_IDLE_MS", 0)
 
     calls = []
-    for name in ("run_deployment", "recover_deployment", "fail_dead_lettered"):
+    for name in ("run_deployment", "recover_deployment", "fail_dead_lettered", "remove_deployment_resources"):
         monkeypatch.setattr(worker, name, lambda deployment_id, name=name: calls.append((name, deployment_id)))
 
     queue.redis_client.delete(TEST_STREAM, TEST_DEAD_STREAM)
@@ -110,3 +110,45 @@ def test_stop_signal_lets_the_current_loop_finish(monkeypatch):
 
     # Only a flag: nothing is interrupted, the loop exits at its next check.
     assert worker.stopping is True
+
+
+def test_cleanup_job_removes_resources_and_acks(jobs):
+    queue.publish_cleanup(7)
+
+    worker.poll_once()
+
+    assert jobs == [("remove_deployment_resources", 7)]
+    assert pending_count() == 0
+
+
+def test_abandoned_cleanup_job_is_retried(jobs):
+    queue.publish_cleanup(7)
+    deliver_without_ack(1)
+
+    worker.poll_once()
+
+    assert jobs == [("remove_deployment_resources", 7)]
+    assert pending_count() == 0
+
+
+def test_failed_cleanup_stays_pending_and_worker_survives(jobs, monkeypatch):
+    def docker_timed_out(deployment_id):
+        raise RuntimeError("Docker cleanup timed out.")
+
+    monkeypatch.setattr(worker, "remove_deployment_resources", docker_timed_out)
+    queue.publish_cleanup(7)
+
+    worker.poll_once()
+
+    assert pending_count() == 1
+
+
+def test_cleanup_delivered_too_often_is_dead_lettered_without_failing_anything(jobs):
+    queue.publish_cleanup(7)
+    deliver_without_ack(queue.MAX_DELIVERIES)
+
+    worker.poll_once()
+
+    assert jobs == []
+    assert pending_count() == 0
+    assert dead_letters() == [{"action": "cleanup", "deployment_id": "7"}]

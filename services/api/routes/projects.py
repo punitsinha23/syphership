@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+import redis
 from auth.dependencies import get_current_user
 from database import get_db
 from models.user import User
@@ -8,7 +9,7 @@ from models.project import Project
 from schemas.project import ProjectCreate, ProjectResponse
 from github.service import fetch_repo_config, get_github_token
 from services.deployment_services import IN_PROGRESS_STATUSES
-from services.docker_services import remove_deployment_resources
+from services.queue import publish_cleanup
 
 
 router = APIRouter(prefix='/projects')
@@ -107,14 +108,14 @@ def delete_project(project_id: int, db: Session = Depends(get_db), user: User = 
             detail="Wait for the current deployment to finish before deleting this project."
         )
 
-    # Remove every container and image before the rows that point to them.
+    # Queue every removal before deleting the rows that point to the containers.
     try:
         for deployment in deployments:
-            remove_deployment_resources(deployment.id)
-    except RuntimeError:
+            publish_cleanup(deployment.id)
+    except redis.exceptions.RedisError:
         raise HTTPException(
-            status_code=502,
-            detail="Could not remove the project's containers. Try again."
+            status_code=503,
+            detail="Could not queue the containers' removal. Try again."
         ) from None
 
     # Deployments are removed by the database (ON DELETE CASCADE).

@@ -223,7 +223,7 @@ A PaaS runs strangers' code on your machine. This phase is what makes the projec
 
 - [ ] Deployed containers run as non-root (open), `--cap-drop=ALL` ✅, `--security-opt=no-new-privileges`, `--pids-limit`, memory/CPU limits (already have limits)
 - [x] Deployed apps run on a separate Docker network: they **cannot** reach PostgreSQL, Redis, the API, or the Docker socket
-- [ ] Only the worker has access to the Docker socket; the API never does (document why: socket = root on host)
+- [x] Only the worker has access to the Docker socket; the API never does (document why: socket = root on host)
 - [ ] Limits: max repo size, build timeout (Phase 5), max image size, max running apps per user
 
 ### Must — Secrets and data

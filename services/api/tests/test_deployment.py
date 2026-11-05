@@ -304,9 +304,9 @@ def test_deployment_list_does_not_include_build_logs(client, auth_headers, proje
 
 @pytest.fixture(autouse=True)
 def fake_remove_resources(monkeypatch):
-    """Never call real Docker from API tests; records removed deployment ids."""
+    """Never publish cleanup jobs to the real queue; records their deployment ids."""
     removed = []
-    monkeypatch.setattr(routes.deployments, "remove_deployment_resources", removed.append)
+    monkeypatch.setattr(routes.deployments, "publish_cleanup", removed.append)
     return removed
 
 
@@ -351,18 +351,18 @@ def test_other_user_cannot_delete_deployment(client, auth_headers, user2_headers
     assert fake_remove_resources == []
 
 
-def test_deployment_kept_when_container_removal_fails(client, auth_headers, project_id, monkeypatch):
+def test_deployment_kept_when_cleanup_cannot_be_queued(client, auth_headers, project_id, monkeypatch):
     deployment_id = deploy(client, auth_headers, project_id).json()["id"]
     set_status(deployment_id, DeploymentStatus.RUNNING)
 
     def fail(deployment_id):
-        raise RuntimeError("Docker cleanup timed out.")
+        raise redis.exceptions.ConnectionError("Redis is down")
 
-    monkeypatch.setattr(routes.deployments, "remove_deployment_resources", fail)
+    monkeypatch.setattr(routes.deployments, "publish_cleanup", fail)
 
     response = client.delete(f"/deployments/{deployment_id}", headers=auth_headers)
 
-    assert response.status_code == 502
+    assert response.status_code == 503
     assert client.get(f"/deployments/{deployment_id}", headers=auth_headers).status_code == 200
 
 

@@ -41,7 +41,7 @@ Status: ✅ done · 🟡 partial · ❌ open
 | 8 | Forged request pretending to be a GitHub push | 3 | — (webhook not built yet) | ❌ |
 | 9 | Brute force or spam on login, deploy, webhook | 3 | Fixed-window counters in Redis: deploy 5/min per user; login exchange 10/min, token refresh 30/min and webhook 60/min per IP. Over the limit returns 429; if Redis is down, these routes return 503 | ✅ |
 | 10 | A broken or hostile queue message crashes the workers in a loop | 1/3 | Malformed messages and messages delivered `MAX_DELIVERIES` times go to the dead-letter stream | ✅ |
-| 11 | Docker socket access from the API | 3 | Builds run only in workers; the API still calls `docker rm` when a deployment is deleted | 🟡 |
+| 11 | Docker socket access from the API | 3 | Only workers use Docker. The API queues cleanup jobs when a deployment or project is deleted, and a test checks it never loads the Docker code | ✅ |
 
 ### Evidence
 
@@ -71,5 +71,4 @@ chown 1:1 /www/index.html  → Operation not permitted
 - **#7 Key separation:** use a dedicated encryption key instead of deriving it from `SECRET_KEY`, so rotating one doesn't break the other.
 - **#8 Webhook:** verify `X-Hub-Signature-256` (HMAC-SHA256, `hmac.compare_digest`); reject repeated `X-GitHub-Delivery` IDs (stored in Redis with a TTL).
 - **#9 Client IP behind a proxy:** once Caddy is in front (Phase 7), `request.client.host` will be Caddy's IP, so read the real one from a trusted header.
-- **#11 Docker access:** move container removal on delete into the worker (via the queue), so the API needs no Docker access.
 - **Redis password:** add `--requirepass` as a second layer behind #1.

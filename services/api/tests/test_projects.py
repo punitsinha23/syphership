@@ -1,4 +1,5 @@
 import pytest
+import redis
 
 def test_projects_requires_auth(client):
     response = client.get("/projects/")
@@ -326,7 +327,7 @@ def fake_remove_resources(monkeypatch):
     """Never call real Docker from API tests; records removed deployment ids."""
     import routes.projects
     removed = []
-    monkeypatch.setattr(routes.projects, "remove_deployment_resources", removed.append)
+    monkeypatch.setattr(routes.projects, "publish_cleanup", removed.append)
     return removed
 
 
@@ -388,11 +389,11 @@ def test_project_kept_when_container_removal_fails(client, auth_headers, monkeyp
     add_deployment(project_id, DeploymentStatus.RUNNING)
 
     def fail(deployment_id):
-        raise RuntimeError("Docker cleanup timed out.")
+        raise redis.exceptions.ConnectionError("Redis is down")
 
-    monkeypatch.setattr(routes.projects, "remove_deployment_resources", fail)
+    monkeypatch.setattr(routes.projects, "publish_cleanup", fail)
 
     response = client.delete(f"/projects/{project_id}", headers=auth_headers)
 
-    assert response.status_code == 502
+    assert response.status_code == 503
     assert client.get(f"/projects/{project_id}", headers=auth_headers).status_code == 200

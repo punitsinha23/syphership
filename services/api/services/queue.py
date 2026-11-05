@@ -9,6 +9,7 @@ load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 STREAM = "deployments"
 GROUP = "builders"
 DEAD_STREAM = "deployments:dead"
+ACTION_CLEANUP = "cleanup"
 # Must be longer than the slowest deployment (docker build alone can take 10 min).
 RECLAIM_IDLE_MS = 15 * 60 * 1000
 MAX_DELIVERIES = 3
@@ -38,6 +39,14 @@ def publish(deployment_id: int) -> str:
     """Queue a deployment for the workers; returns the stream message ID."""
 
     return redis_client.xadd(STREAM, {"deployment_id": deployment_id})
+
+
+def publish_cleanup(deployment_id: int) -> str:
+    """Queue removal of a deployment's container and image; returns the message ID.
+
+    Only workers touch Docker, so the public API needs no access to it."""
+
+    return redis_client.xadd(STREAM, {"action": ACTION_CLEANUP, "deployment_id": deployment_id})
 
 
 def delivery_count(message_id: str) -> int:
