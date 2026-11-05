@@ -230,7 +230,7 @@ A PaaS runs strangers' code on your machine. This phase is what makes the projec
 
 - [x] Encrypt OAuth access tokens at rest (Fernet, key derived from `SECRET_KEY`)
 - [ ] Private repos: request repo scope (or GitHub App), clone with the token **without** it appearing in build logs, error messages, or `git remote -v`
-- [ ] Scrub secrets from build logs and API errors (test it)
+- [x] Scrub secrets from build logs and API errors (test it)
 - [ ] Per-project environment variables, encrypted at rest, injected at `docker run`, shown masked in the UI
 
 ### Must — API security

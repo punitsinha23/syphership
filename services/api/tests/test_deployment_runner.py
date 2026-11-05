@@ -429,3 +429,62 @@ def test_other_projects_are_not_stopped(make_user, pipeline):
     runner.run_deployment(new_id)
 
     assert get_deployment(other_id).status == DeploymentStatus.RUNNING
+
+
+# Not shaped like a GitHub token, so only the exact-match step can catch it.
+LEAKY_TOKEN = "plain-secret-value"
+
+
+def use_leaky_token(monkeypatch):
+    monkeypatch.setattr(runner, "get_github_token", lambda db, user: LEAKY_TOKEN)
+
+
+def test_token_in_clone_error_is_not_saved_or_logged(make_user, pipeline, monkeypatch, caplog):
+    deployment_id = create_queued_deployment(make_user)
+    use_leaky_token(monkeypatch)
+    monkeypatch.setattr(
+        runner,
+        "clone_repository",
+        fail_with(DeploymentError(f"fatal: could not read from https://{LEAKY_TOKEN}@github.com/octo/app.git")),
+    )
+
+    runner.run_deployment(deployment_id)
+
+    deployment = get_deployment(deployment_id)
+    assert deployment.status == DeploymentStatus.FAILED
+    assert LEAKY_TOKEN not in deployment.failure_reason
+    assert "https://***@github.com" in deployment.failure_reason
+    assert LEAKY_TOKEN not in caplog.text
+
+
+def test_token_in_failed_build_logs_is_not_saved(make_user, pipeline, monkeypatch):
+    deployment_id = create_queued_deployment(make_user)
+    use_leaky_token(monkeypatch)
+    monkeypatch.setattr(
+        runner,
+        "build_docker_image",
+        fail_with(BuildError("Docker build failed.", f"#3 RUN echo {LEAKY_TOKEN} ghp_otherToken123\n")),
+    )
+
+    runner.run_deployment(deployment_id)
+
+    logs = get_deployment(deployment_id).build_logs
+    assert LEAKY_TOKEN not in logs
+    assert "ghp_otherToken123" not in logs
+    assert "#3 RUN echo *** ***" in logs
+
+
+def test_token_in_successful_build_logs_is_not_saved(make_user, pipeline, monkeypatch):
+    deployment_id = create_queued_deployment(make_user)
+    use_leaky_token(monkeypatch)
+    monkeypatch.setattr(
+        runner,
+        "build_docker_image",
+        lambda *args, **kwargs: ("syphership-deployment-1:latest", f"#1 token={LEAKY_TOKEN}\n"),
+    )
+
+    runner.run_deployment(deployment_id)
+
+    deployment = get_deployment(deployment_id)
+    assert deployment.status == DeploymentStatus.RUNNING
+    assert deployment.build_logs == "#1 token=***\n"

@@ -36,7 +36,7 @@ Status: ✅ done · 🟡 partial · ❌ open
 | 3 | App uses all CPU/memory/processes and starves the host | 1 | `--cpus 0.5`, `--memory 256m`, `--memory-swap 256m`, `--pids-limit 256` | ✅ |
 | 4 | User reads another user's project/deployment/logs by changing the ID in the URL (IDOR) | 2 | Every query filters by `Project.user_id == user.id`; returns 404 (not 403) so IDs can't be probed | ✅ |
 | 5 | Repo, branch or SHA used to inject shell commands or git options | 1 | All `subprocess` calls use argument lists, never `shell=True`; clone only accepts HTTPS `github.com` URLs ending in `.git`; SHAs must be 40 lowercase hex characters; repo names must be `owner/name`; branch names can't start with `-` or hold characters git refuses | ✅ |
-| 6 | GitHub token leaks via `git remote -v` or clone errors | 1/2 | Token passed to git as an HTTP header through environment variables, never in the URL | 🟡 |
+| 6 | GitHub token leaks via `git remote -v`, clone errors or build logs | 1/2 | Token passed to git as an HTTP header through environment variables, never in the URL; clone errors shown to users are generic; build logs and failure reasons go through `scrub()` before saving, with tests that try to leak a token | ✅ |
 | 7 | Database dump exposes OAuth tokens | 3 | Tokens encrypted at rest with Fernet (key derived from `SECRET_KEY`) | ✅ |
 | 8 | Forged request pretending to be a GitHub push | 3 | — (webhook not built yet) | ❌ |
 | 9 | Brute force or spam on login, deploy, webhook | 3 | — | ❌ |
@@ -67,7 +67,7 @@ chown 1:1 /www/index.html  → Operation not permitted
 ## Open work
 
 - **#2 Non-root:** decide whether to enforce `--user` (breaks images that bind port 80 or write to `/root`). Consider a read-only root filesystem.
-- **#6 Scrubbing:** replace tokens with `***` in build logs and error messages before saving; add a test that tries to leak one. Private-repo cloning failed during testing and needs investigating.
+- **#6 Server logs:** tracebacks from unexpected errors (`logger.exception`) are not scrubbed. Users never see them, but anyone reading the worker logs could.
 - **#7 Key separation:** use a dedicated encryption key instead of deriving it from `SECRET_KEY`, so rotating one doesn't break the other.
 - **#8 Webhook:** verify `X-Hub-Signature-256` (HMAC-SHA256, `hmac.compare_digest`); reject repeated `X-GitHub-Delivery` IDs (stored in Redis with a TTL).
 - **#9 Rate limiting:** per user/IP counters in Redis with `INCR` + `EXPIRE`; respond 429 over the limit.

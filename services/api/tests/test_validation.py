@@ -3,7 +3,7 @@ from fastapi import HTTPException
 
 import github.service
 from services.repository_service import clone_repository
-from services.validation import is_valid_branch, is_valid_sha
+from services.validation import is_valid_branch, is_valid_sha, scrub
 
 SHA = "a1b2c3d4" * 5
 
@@ -62,3 +62,21 @@ def test_repo_config_rejects_bad_branch(monkeypatch):
 
     assert error.value.status_code == 422
     assert calls == ["/repos/octo/app"]  # The branch never reached GitHub.
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        (("clone failed for abc123", "abc123"), "clone failed for ***"),
+        (("a tok1 b tok2", "tok1", "tok2"), "a *** b ***"),
+        (("token ghp_AbC123xyz here",), "token *** here"),
+        (("gho_x ghs_y github_pat_11ABC_def",), "*** *** ***"),
+        (("hello", ""), "hello"),  # replace("") would put *** between every character
+        (("hello", None), "hello"),
+        (("plain",), "plain"),
+        ((None,), None),
+        (("",), ""),
+    ],
+)
+def test_scrub(args, expected):
+    assert scrub(*args) == expected

@@ -25,6 +25,7 @@ from services.docker_services import (
 )
 from services.errors import DeploymentError
 from services.health_service import wait_for_healthy
+from services.validation import scrub
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,7 @@ def run_deployment(deployment_id: int) -> None:
 
     db = SessionLocal()
     repository_path: Path | None = None
+    token: str | None = None
 
     try:
         deployment = (
@@ -236,7 +238,7 @@ def run_deployment(deployment_id: int) -> None:
                 repository_path,
                 deployment.id,
             )
-            deployment.build_logs = build_logs
+            deployment.build_logs = scrub(build_logs, token)
 
             # Read the port the app listens on from the Dockerfile's EXPOSE.
             container_port = get_exposed_port(image_tag)
@@ -294,17 +296,18 @@ def run_deployment(deployment_id: int) -> None:
 
         except DeploymentError as error:
             # Expected failure with a message meant for the user.
+            safe_message = scrub(str(error), token)
             logger.warning(
                 "Deployment %s failed: %s",
                 deployment_id,
-                error,
+                safe_message,
             )
             if _mark_failed(
                 db,
                 deployment_id,
-                str(error),
+                safe_message,
                 # Only BuildError carries logs; other errors give None.
-                build_logs=getattr(error, "logs", None),
+                build_logs=scrub(getattr(error, "logs", None), token),
             ):
                 _remove_resources(deployment_id)
 
