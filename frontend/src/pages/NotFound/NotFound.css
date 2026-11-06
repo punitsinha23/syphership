@@ -1,0 +1,21 @@
+.not-found {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 0;
+  text-align: center;
+}
+
+.not-found-title {
+  margin-bottom: 12px;
+  font-size: clamp(30px, 4vw, 44px);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.not-found-text {
+  margin-bottom: 28px;
+  color: var(--color-text-secondary);
+}

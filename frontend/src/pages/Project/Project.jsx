@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react"
+import { useNavigate } from "react-router-dom"
 import { getProjects, createProject, getAllDeployments, latestByProject } from "../../api/projects"
 import { getBranches } from "../../api/github"
 import { ProjectCard } from "../../components/ProjectCard/ProjectCard"
@@ -9,6 +10,7 @@ import { usePolling } from "../../hooks/usePolling"
 import "./Project.css"
 
 function Projects() {
+    const navigate = useNavigate()
     const [name, setName] = useState("")
     const [nameEdited, setNameEdited] = useState(false)
     const [description, setDescription] = useState("")
@@ -84,6 +86,12 @@ function Projects() {
                 selectedRepo?.full_name ?? null,
                 selectedRepo ? branch : null
             )
+
+            // A linked repo starts building right away, so go and watch it
+            if (selectedRepo) {
+                navigate(`/projects/${data.id}`, { state: { warning: data.deployment_warning } })
+                return
+            }
 
             // The API lists newest first, so keep the new project at the top
             setProjects((currentProjects) => [

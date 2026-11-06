@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import { useEffect } from "react"
 import { OAuthButtons } from "../../components/OAuthButtons/OAuthButtons"
 import { PublicLayout } from "../../components/PublicLayout/PublicLayout"
@@ -37,12 +37,13 @@ const PERMISSIONS = [
             { name: "user:email", text: "Your email address, to identify your account." },
             {
                 name: "repo",
-                text: "Lets us list your repositories and clone the one you deploy, including private ones.",
+                text: "Lets us list your repositories, clone the one you deploy, including private ones, and add a webhook to it.",
             },
         ],
         note:
             "GitHub labels the repo permission as full access, because it has no read-only option for " +
-            "private code. Syphership only reads: it never pushes, commits, opens pull requests or changes settings.",
+            "private code. Syphership never pushes, commits or opens pull requests. The one thing it changes " +
+            "is adding a webhook to the repository you link, so your pushes can deploy automatically.",
     },
     {
         provider: "Google",
@@ -86,7 +87,7 @@ const FAQ = [
         answer:
             "GitHub's sign-in lets apps ask for public-only access or for full repository access. To deploy " +
             "private repositories we have to ask for full access, and GitHub shows the broadest description of it. " +
-            "Syphership only uses it to list your repositories and to clone the one you deploy.",
+            "Syphership only uses it to list your repositories, clone the one you deploy, and add a webhook to it.",
     },
     {
         question: "Do you keep a copy of my code?",
@@ -98,14 +99,15 @@ const FAQ = [
     {
         question: "What does my project need?",
         answer:
-            "A Dockerfile at the root of the repository that EXPOSEs the port your app listens on. Make sure the " +
-            "app listens on 0.0.0.0, not localhost, so it can be reached from outside its container.",
+            "A Dockerfile at the root of the repository that EXPOSEs the port your app listens on and sets a " +
+            "non-root USER, because apps can't run as root. Make sure the app listens on 0.0.0.0, not localhost, " +
+            "so it can be reached from outside its container.",
     },
     {
         question: "How do I remove Syphership's access?",
         answer:
-            "Delete your projects in Syphership, then revoke access from your GitHub or Google settings (links " +
-            "below). Revoking takes effect immediately.",
+            "Delete your projects in Syphership, which also removes their webhooks, then revoke access from your " +
+            "GitHub or Google settings (links below). Revoking takes effect immediately.",
     },
 ]
 
@@ -162,15 +164,8 @@ function CheckIcon() {
 }
 
 function Landing() {
-    const navigate = useNavigate()
     const { hash } = useLocation()
-
-    useEffect(() => {
-        const token = localStorage.getItem("access_token")
-        if (token) {
-            navigate("/dashboard")
-        }
-    }, [navigate])
+    const signedIn = Boolean(localStorage.getItem("access_token"))
 
     // Links like /#security come from other pages; scroll to the section
     useEffect(() => {
@@ -194,7 +189,7 @@ function Landing() {
                         </p>
 
                         <div className="landing-auth" {...reveal(240)}>
-                            <OAuthButtons />
+                            {signedIn ? <Link className="btn btn-primary" to="/dashboard">Go to dashboard</Link> : <OAuthButtons />}
                         </div>
 
                         <ul className="landing-trust" aria-label="Security at a glance" {...reveal(320)}>
@@ -232,7 +227,8 @@ function Landing() {
                     </h2>
                     <p className="landing-section-lead" {...reveal(160)}>
                         Giving an app access to your code is a big decision. Here is every permission we ask for,
-                        in plain words, and what we do with it.
+                        in plain words, and what we do with it. For the full picture, including the limits, see{" "}
+                        <Link to="/how-it-works">how Syphership works</Link>.
                     </p>
 
                     <div className="permission-grid">
@@ -289,10 +285,10 @@ function Landing() {
                 <section className="landing-cta" aria-labelledby="cta-heading" {...reveal()}>
                     <div>
                         <h2 id="cta-heading">Ready for launch?</h2>
-                        <p>Either button creates your account in a few seconds.</p>
+                        <p>{signedIn ? "Your projects are waiting." : "Either button creates your account in a few seconds."}</p>
                     </div>
                     <div className="landing-cta-auth">
-                        <OAuthButtons />
+                        {signedIn ? <Link className="btn btn-primary" to="/dashboard">Go to dashboard</Link> : <OAuthButtons />}
                     </div>
                 </section>
             </main>

@@ -9,24 +9,27 @@ const TODAY = [
     "Run each deployment in its own container, with a health check",
     "Follow status live and read the full build log",
     "Delete deployments and projects, containers included",
+    "Deploy automatically on every git push",
+    "Build in a job queue with scalable workers",
+    "Set encrypted environment variables per project",
 ]
 
 // From the project roadmap (PROJECT.md)
 const NEXT = [
-    "A job queue with separate build workers",
-    "Stable URLs per project and custom domains",
-    "Environment variables and secrets",
+    "Stable URLs per project, with HTTPS",
     "Live log streaming while a build runs",
+    "Monitoring and automatic tests on every change",
+    "Account settings, including deleting your account",
 ]
 
 const PRINCIPLES = [
     {
         title: "Explain every permission",
-        text: "If Syphership asks for access, the reason is written down on the homepage in plain words.",
+        text: "If Syphership asks for access, the reason is written down in plain words.",
     },
     {
-        title: "Read, never write",
-        text: "Syphership reads the repository you deploy. It never pushes, commits or changes anything on GitHub.",
+        title: "Never touch your code",
+        text: "Syphership reads the repository you deploy and never pushes or commits to it. The only thing it adds is a webhook, so your pushes deploy.",
     },
     {
         title: "Be honest about limits",
@@ -34,7 +37,7 @@ const PRINCIPLES = [
     },
 ]
 
-const STACK = ["React", "FastAPI", "PostgreSQL", "Docker"]
+const STACK = ["React", "FastAPI", "PostgreSQL", "Redis", "Docker"]
 
 function About() {
     return (
@@ -96,7 +99,8 @@ function About() {
                     </ol>
 
                     <p className="about-more" {...reveal()}>
-                        Every permission is listed on the <Link to="/#security">security section</Link> of the homepage.
+                        See <Link to="/how-it-works">how Syphership works</Link> for what it stores, how it's protected
+                        and where its limits are.
                     </p>
                 </section>
 

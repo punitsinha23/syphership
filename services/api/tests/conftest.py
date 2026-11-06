@@ -12,6 +12,7 @@ from models.deployment import Deployment
 from auth.security import create_session_tokens
 from main import app
 import github.webhook
+import services.deployment_services
 from services.queue import redis_client
 
 
@@ -45,6 +46,12 @@ def setup_db():
 def no_real_webhooks(monkeypatch):
     """Without a public URL, no test creates a webhook on real GitHub."""
     monkeypatch.setattr(github.webhook, "PUBLIC_API_URL", "")
+
+
+@pytest.fixture(autouse=True)
+def no_real_queue(monkeypatch):
+    """No API test adds a deployment to the real build queue."""
+    monkeypatch.setattr(services.deployment_services, "publish", lambda deployment_id: "0-0")
 
 
 @pytest.fixture(autouse=True)

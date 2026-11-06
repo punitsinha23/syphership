@@ -1,5 +1,9 @@
+import httpx
 import pytest
 import redis
+
+import routes.projects
+import services.deployment_services
 
 def test_projects_requires_auth(client):
     response = client.get("/projects/")
@@ -397,3 +401,95 @@ def test_project_kept_when_container_removal_fails(client, auth_headers, monkeyp
 
     assert response.status_code == 503
     assert client.get(f"/projects/{project_id}", headers=auth_headers).status_code == 200
+
+
+FIRST_SHA = "b" * 40
+
+
+@pytest.fixture
+def repo_with_commit(github_connected, monkeypatch):
+    """A connected GitHub account whose repo has one commit."""
+    def fake_get(path, token, params=None):
+        if path == "/repos/octo/app/commits":
+            return [{"sha": FIRST_SHA}]
+        return fake_github_get(path, token, params)
+
+    monkeypatch.setattr(github.service, "github_get", fake_get)
+    return github_connected
+
+
+def deployments_of(client, headers, project_id):
+    return client.get(f"/deployments/?project_id={project_id}", headers=headers).json()
+
+
+def test_linking_a_repo_starts_the_first_deployment(client, repo_with_commit, monkeypatch):
+    published = []
+    monkeypatch.setattr(services.deployment_services, "publish", published.append)
+
+    response = create(client, repo_with_commit, repo_full_name="octo/app")
+
+    assert response.status_code == 200
+    body = response.json()
+    [deployment] = deployments_of(client, repo_with_commit, body["id"])
+    assert deployment["commit_sha"] == FIRST_SHA
+    assert deployment["status"] == "QUEUED"
+    assert body["first_deployment_id"] == deployment["id"]
+    assert body["deployment_warning"] is None
+    assert published == [deployment["id"]]
+
+
+def test_project_without_a_repo_does_not_deploy(client, auth_headers):
+    body = create(client, auth_headers).json()
+
+    assert body["first_deployment_id"] is None
+    assert body["deployment_warning"] is None
+    assert deployments_of(client, auth_headers, body["id"]) == []
+
+
+def test_auto_deploy_off_skips_the_first_deployment(client, repo_with_commit):
+    body = create(client, repo_with_commit, repo_full_name="octo/app", auto_deploy=False).json()
+
+    assert body["first_deployment_id"] is None
+    assert body["deployment_warning"] is None
+    assert deployments_of(client, repo_with_commit, body["id"]) == []
+
+
+def test_project_is_kept_when_the_queue_is_down(client, repo_with_commit, monkeypatch):
+    def queue_down(deployment_id):
+        raise redis.exceptions.ConnectionError("Redis is down")
+
+    monkeypatch.setattr(services.deployment_services, "publish", queue_down)
+
+    response = create(client, repo_with_commit, repo_full_name="octo/app")
+
+    assert response.status_code == 200
+    assert "didn't start" in response.json()["deployment_warning"]
+    assert client.get(f"/projects/{response.json()['id']}", headers=repo_with_commit).status_code == 200
+
+
+def test_project_is_kept_at_the_app_limit(client, repo_with_commit, monkeypatch):
+    monkeypatch.setattr(services.deployment_services, "MAX_APPS_PER_USER", 0)
+
+    response = create(client, repo_with_commit, repo_full_name="octo/app")
+
+    assert response.status_code == 200
+    assert response.json()["first_deployment_id"] is None
+    assert "apps running" in response.json()["deployment_warning"]
+    assert deployments_of(client, repo_with_commit, response.json()["id"]) == []
+
+
+@pytest.mark.parametrize(
+    "error",
+    [HTTPException(status_code=404, detail="No commits found for this branch."), httpx.ConnectError("GitHub is down")],
+    ids=["empty-repo", "github-down"],
+)
+def test_project_is_kept_when_the_commit_cannot_be_read(client, github_connected, monkeypatch, error):
+    def fail(token, full_name, branch):
+        raise error
+
+    monkeypatch.setattr(routes.projects, "fetch_latest_commit", fail)
+
+    response = create(client, github_connected, repo_full_name="octo/app")
+
+    assert response.status_code == 200
+    assert "didn't start" in response.json()["deployment_warning"]

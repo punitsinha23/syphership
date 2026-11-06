@@ -103,7 +103,7 @@ def queue_deployment(db: Session, project: Project, commit_sha: str) -> Deployme
 
     try:
         publish(deployment.id)
-    except redis.exceptions.ConnectionError:
+    except redis.exceptions.RedisError:
         update_deployment_status(
             deployment,
             DeploymentStatus.FAILED,

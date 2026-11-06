@@ -36,3 +36,10 @@ class ProjectResponse(BaseModel):
     repo_private: bool | None = None
     auto_deploy: bool
     webhook_active: bool
+
+
+class ProjectCreated(ProjectResponse):
+    """A new project, and what happened to its first deployment."""
+
+    first_deployment_id: int | None = None
+    deployment_warning: str | None = None

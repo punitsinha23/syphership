@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { getProjectDetails, createDeployment, deleteProject, getDeployments } from "../../api/projects"
 import { getUser } from "../../api/user"
 import { connectGitHub } from "../../api/auth"
@@ -29,6 +29,8 @@ function ProjectDetails() {
 
     const { project_id } = useParams()
     const navigate = useNavigate()
+    // Set when the first deployment of a new project couldn't start
+    const { state: locationState } = useLocation()
 
     async function handleDeleteProject() {
         const confirmed = window.confirm(
@@ -207,6 +209,8 @@ function ProjectDetails() {
                             </button>
                         </div>
                     )}
+
+                    {locationState?.warning && <div className="alert alert-info">{locationState.warning}</div>}
 
                     {error && <div className="alert alert-error">{error}</div>}
 

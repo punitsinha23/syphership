@@ -5,12 +5,14 @@ import { EngineTrail } from "./components/EngineTrail/EngineTrail"
 
 import Landing from "./pages/Landing/Landing"
 import About from "./pages/About/About"
+import HowItWorks from "./pages/HowItWorks/HowItWorks"
 import Login from "./pages/Login/Login"
 import Dashboard from "./pages/Dashboard/Dashboard"
 import Projects from "./pages/Project/Project"
 import ProjectDetails from "./pages/ProjectDetails/ProjectDetails"
 import DeploymentDetails from "./pages/DeploymentDetails/DeploymentDetails"
 import AuthCallback from "./pages/AuthCallback/AuthCallback"
+import NotFound from "./pages/NotFound/NotFound"
 
 
 
@@ -22,6 +24,7 @@ function App(){
     <Routes>
       <Route path='/' element={<Landing/>}/>
       <Route path='/about' element={<About/>}/>
+      <Route path='/how-it-works' element={<HowItWorks/>}/>
       <Route path='/login' element={<Login/>}/>
       {/* Sign-up and sign-in are the same OAuth flow */}
       <Route path='/register' element={<Navigate to="/login" replace/>}/>
@@ -57,6 +60,7 @@ function App(){
             </ProtectedRoute>
           }
           />
+      <Route path="*" element={<NotFound/>}/>
     </Routes>
     </BrowserRouter>
   )

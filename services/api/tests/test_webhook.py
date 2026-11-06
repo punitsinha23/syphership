@@ -326,7 +326,8 @@ def fake_github(monkeypatch):
     monkeypatch.setattr(
         github.service,
         "github_get",
-        lambda path, token, params=None: {
+        # No commits, so these tests aren't affected by the first deployment.
+        lambda path, token, params=None: [] if path.endswith("/commits") else {
             "id": 42 if "other" not in path else 43,
             "full_name": path.removeprefix("/repos/").split("/branches")[0],
             "default_branch": "main",

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+import httpx
 from sqlalchemy.orm import Session
 import redis
 from auth.dependencies import get_current_user
@@ -6,10 +7,10 @@ from database import get_db
 from models.user import User
 from models.deployment import Deployment
 from models.project import Project
-from schemas.project import EnvVarsResponse, EnvVarsUpdate, ProjectCreate, ProjectResponse
-from github.service import fetch_repo_config, get_github_token
+from schemas.project import EnvVarsResponse, EnvVarsUpdate, ProjectCreate, ProjectCreated, ProjectResponse
+from github.service import fetch_latest_commit, fetch_repo_config, get_github_token
 from github.webhook import create_webhook, delete_webhook
-from services.deployment_services import IN_PROGRESS_STATUSES
+from services.deployment_services import IN_PROGRESS_STATUSES, queue_deployment
 from services.env_vars import MAX_ENV_VARS, read_env_vars, save_env_vars, validate_env_var
 from services.errors import DeploymentError
 from services.queue import publish_cleanup
@@ -20,7 +21,25 @@ router = APIRouter(prefix='/projects')
 
 
 
-@router.post("/", response_model=ProjectResponse)
+def _start_first_deployment(db: Session, project: Project, token: str) -> tuple[int | None, str | None]:
+    """Deploy a new project's latest commit. Returns (deployment ID, warning).
+
+    The project is already saved, so a failure here only becomes a warning:
+    the user can fix the cause and press Deploy."""
+    try:
+        commit_sha = fetch_latest_commit(token, project.repo_full_name, project.repo_branch)
+        return queue_deployment(db, project, commit_sha).id, None
+    except DeploymentError as e:
+        reason = str(e)
+    except HTTPException as e:
+        reason = e.detail
+    except httpx.HTTPError:
+        reason = "GitHub could not be reached."
+
+    return None, f"Project created, but the first deployment didn't start. {reason}"
+
+
+@router.post("/", response_model=ProjectCreated)
 def create_projects(project: ProjectCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     repo_fields = {}
     token = None
@@ -43,10 +62,20 @@ def create_projects(project: ProjectCreate, db: Session = Depends(get_db), user:
     db.commit()
     db.refresh(new_project)
 
+    first_deployment_id = None
+    deployment_warning = None
+
     if token:
         create_webhook(db, new_project, token)
+        if new_project.auto_deploy:
+            first_deployment_id, deployment_warning = _start_first_deployment(db, new_project, token)
+            db.refresh(new_project)
 
-    return new_project
+    return ProjectCreated(
+        **ProjectResponse.model_validate(new_project).model_dump(),
+        first_deployment_id=first_deployment_id,
+        deployment_warning=deployment_warning,
+    )
 
 @router.get("/", response_model=list[ProjectResponse])
 def get_projects(db: Session = Depends(get_db), user: User = Depends(get_current_user)):

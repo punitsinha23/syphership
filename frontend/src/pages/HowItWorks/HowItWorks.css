@@ -1,0 +1,290 @@
+.how-hero {
+  max-width: 800px;
+  padding: 72px 0 64px;
+}
+
+.how-title {
+  margin-bottom: 22px;
+  font-size: clamp(34px, 4.6vw, 54px);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.how-title-accent {
+  color: var(--color-accent);
+}
+
+.how-lead {
+  max-width: 640px;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+/* Each stage lights up in turn, like a push moving through the system */
+.how-pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 36px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.how-pipeline li {
+  position: relative;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  animation: how-pulse 7s linear infinite;
+  animation-delay: calc(var(--step) * 1s);
+}
+
+@keyframes how-pulse {
+  0%, 14%, 100% {
+    border-color: var(--color-border);
+    color: var(--color-text-secondary);
+  }
+  3%, 11% {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+}
+
+.how-section {
+  padding: 56px 0 64px;
+  border-top: 1px solid var(--color-border);
+}
+
+.how-intro {
+  max-width: 640px;
+  margin-bottom: 32px;
+}
+
+.how-intro h2 {
+  margin-bottom: 10px;
+  font-size: clamp(22px, 2.6vw, 28px);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.how-intro p:not(.eyebrow) {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.how-section a {
+  color: var(--color-accent);
+}
+
+.how-section h3 {
+  margin-bottom: 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.how-section li p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.how-journey,
+.how-parts,
+.how-grid,
+.how-limits,
+.how-control {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.how-journey {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 720px;
+}
+
+.how-journey li {
+  display: flex;
+  gap: 20px;
+}
+
+.how-journey-index {
+  flex: none;
+  padding-top: 2px;
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.how-parts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.how-parts li,
+.how-limits li {
+  padding: 20px;
+}
+
+.how-parts code {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.how-table-card {
+  overflow: hidden;
+}
+
+.how-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.how-table th,
+.how-table td {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--color-border);
+  line-height: 1.5;
+  text-align: left;
+  vertical-align: top;
+}
+
+.how-table tbody tr:last-child th,
+.how-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.how-table thead th {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.how-table tbody th {
+  font-weight: 600;
+}
+
+.how-table td {
+  color: var(--color-text-secondary);
+}
+
+.how-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px 40px;
+}
+
+.how-grid-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.how-limits {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.how-limits li {
+  border-left: 2px solid var(--color-status-building);
+}
+
+.how-control {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 720px;
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.how-control strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.how-more {
+  margin: 28px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .how-pipeline li {
+    animation: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .how-parts,
+  .how-grid-three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .how-hero {
+    padding: 40px 0 44px;
+  }
+
+  .how-parts,
+  .how-grid,
+  .how-grid-three,
+  .how-limits {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Each table row becomes a small block; the header row isn't needed */
+  .how-table thead {
+    display: none;
+  }
+
+  .how-table,
+  .how-table tbody,
+  .how-table tr,
+  .how-table th,
+  .how-table td {
+    display: block;
+  }
+
+  .how-table tr {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .how-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .how-table th,
+  .how-table td {
+    padding: 0;
+    border: 0;
+  }
+
+  .how-table td {
+    margin-top: 6px;
+    font-size: 13px;
+  }
+
+  .how-table td::before {
+    content: attr(data-label) ": ";
+    color: var(--color-text-muted);
+  }
+}

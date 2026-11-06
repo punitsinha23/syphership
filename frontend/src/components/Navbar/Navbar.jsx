@@ -7,6 +7,11 @@ import "./Navbar.css"
 
 const LINKS = [
     {
+        to: "/",
+        label: "Home",
+        icon: <path d="M3 11l9-8 9 8M5 9.5V21h5v-6h4v6h5V9.5" />,
+    },
+    {
         to: "/dashboard",
         label: "Overview",
         icon: <path d="M3 3h7v7H3zM14 3h7v4h-7zM14 11h7v10h-7zM3 14h7v7H3z" />,
