@@ -106,7 +106,7 @@ const FAQ = [
     {
         question: "How do I remove Syphership's access?",
         answer:
-            "Delete your projects in Syphership, which also removes their webhooks, then revoke access from your " +
+            "Delete your account in Settings, which also removes your projects and webhooks, then revoke access from your " +
             "GitHub or Google settings (links below). Revoking takes effect immediately.",
     },
 ]

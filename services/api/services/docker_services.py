@@ -309,8 +309,11 @@ def get_container_status(container_id: str) -> str:
     except subprocess.TimeoutExpired:
         raise RuntimeError("Docker container inspection timed out.") from None
 
-    except subprocess.CalledProcessError:
-        raise ValueError("Docker container was not found.") from None
+    except subprocess.CalledProcessError as e:
+        # Anything else means Docker itself failed, not that the app is gone.
+        if "No such" in _output_text(e.stderr):
+            raise ValueError("Docker container was not found.") from None
+        raise RuntimeError("Docker could not inspect the container.") from None
 
     except FileNotFoundError:
         raise RuntimeError("Docker executable could not be found.") from None

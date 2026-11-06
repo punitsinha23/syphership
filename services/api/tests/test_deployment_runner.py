@@ -579,3 +579,56 @@ def test_container_really_running_as_root_is_removed(make_user, pipeline, monkey
     assert deployment.url is None
     assert "health" not in pipeline["calls"]
     assert deployment_id in pipeline["removed"]
+
+
+def running_deployment(make_user, container_id="abc123container"):
+    deployment_id = create_queued_deployment(make_user, status=DeploymentStatus.RUNNING)
+    db = TestingSessionLocal()
+    try:
+        db.query(Deployment).filter(Deployment.id == deployment_id).update({"container_id": container_id})
+        db.commit()
+    finally:
+        db.close()
+    return deployment_id
+
+
+@pytest.mark.parametrize("status", ["exited", "dead"])
+def test_dead_app_is_marked_failed_and_cleaned_up(make_user, pipeline, monkeypatch, status):
+    deployment_id = running_deployment(make_user)
+    monkeypatch.setattr(runner, "get_container_status", lambda container_id: status)
+
+    runner.fail_dead_deployments()
+
+    deployment = get_deployment(deployment_id)
+    assert deployment.status == DeploymentStatus.FAILED
+    assert deployment.failed_stage == DeploymentStatus.RUNNING
+    assert "stopped running" in deployment.failure_reason
+    assert deployment_id in pipeline["removed"]
+
+
+def test_missing_container_counts_as_dead(make_user, pipeline, monkeypatch):
+    deployment_id = running_deployment(make_user)
+    monkeypatch.setattr(runner, "get_container_status", fail_with(ValueError("Docker container was not found.")))
+
+    runner.fail_dead_deployments()
+
+    assert get_deployment(deployment_id).status == DeploymentStatus.FAILED
+
+
+def test_healthy_app_is_left_alone(make_user, pipeline):
+    deployment_id = running_deployment(make_user)
+
+    runner.fail_dead_deployments()
+
+    assert get_deployment(deployment_id).status == DeploymentStatus.RUNNING
+    assert pipeline["removed"] == []
+
+
+def test_docker_outage_does_not_fail_every_app(make_user, pipeline, monkeypatch):
+    deployment_id = running_deployment(make_user)
+    monkeypatch.setattr(runner, "get_container_status", fail_with(RuntimeError("Docker could not inspect the container.")))
+
+    with pytest.raises(RuntimeError):
+        runner.fail_dead_deployments()
+
+    assert get_deployment(deployment_id).status == DeploymentStatus.RUNNING

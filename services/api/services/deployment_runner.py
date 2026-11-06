@@ -150,6 +150,47 @@ def claim_deployment(db, deployment_id: int) -> bool:
     return claimed == 1
 
 
+def fail_dead_deployments() -> None:
+    """Mark RUNNING deployments as FAILED if their container has died.
+
+    Raises RuntimeError, changing nothing more, if Docker can't be asked."""
+    db = SessionLocal()
+    try:
+        running = (
+            db.query(Deployment.id, Deployment.container_id)
+            .filter(Deployment.status == DeploymentStatus.RUNNING)
+            .all()
+        )
+
+        for deployment_id, container_id in running:
+            if not container_id:
+                continue
+
+            try:
+                if get_container_status(container_id) not in ("exited", "dead"):
+                    continue
+            except ValueError:
+                pass  # The container no longer exists.
+
+            # Only if it's still RUNNING: a newer deployment may have replaced it.
+            changed = (
+                db.query(Deployment)
+                .filter(Deployment.id == deployment_id, Deployment.status == DeploymentStatus.RUNNING)
+                .update({
+                    Deployment.status: DeploymentStatus.FAILED,
+                    Deployment.failed_stage: DeploymentStatus.RUNNING,
+                    Deployment.failure_reason: "The app stopped running. Deploy again to restart it.",
+                })
+            )
+            db.commit()
+
+            if changed:
+                logger.warning("Deployment %s stopped running; marked as failed.", deployment_id)
+                _remove_resources(deployment_id)
+    finally:
+        db.close()
+
+
 def run_deployment(deployment_id: int) -> None:
     """Clone, build, and start a deployment."""
 

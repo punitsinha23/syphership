@@ -1,4 +1,3 @@
-import { useEffect } from "react"
 import { Link } from "react-router-dom"
 import { PublicLayout } from "../../components/PublicLayout/PublicLayout"
 import { reveal } from "../../hooks/useScrollReveal"
@@ -106,10 +105,6 @@ const LESSONS = [
 ]
 
 function HowItWorks() {
-    useEffect(() => {
-        window.scrollTo(0, 0)
-    }, [])
-
     return (
         <PublicLayout>
             <main className="how">
@@ -275,14 +270,12 @@ function HowItWorks() {
                             </a>. It takes effect immediately.
                         </li>
                         <li>
-                            <strong>Delete your account:</strong> there's no button for this yet.
-                            Contact me through{" "}
-                            <a href="https://github.com/punitsinha23" target="_blank" rel="noreferrer">GitHub</a>{" "}
-                            and I'll do it for you.
+                            <strong>Delete your account</strong> from Settings, and everything above goes with it.
                         </li>
                         <li>
-                            <strong>Found a security problem?</strong> Please tell me the same way, before posting
-                            the details publicly.
+                            <strong>Found a security problem?</strong> Please tell me through{" "}
+                            <a href="https://github.com/punitsinha23" target="_blank" rel="noreferrer">GitHub</a>{" "}
+                            before posting the details publicly.
                         </li>
                     </ul>
                     <p className="how-more" {...reveal()}>

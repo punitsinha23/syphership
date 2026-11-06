@@ -29,6 +29,16 @@ class OAuthAccount(Base):
     )
 
 
+class RefreshToken(Base):
+    """One row per refresh token, so a token can only be used once."""
+    __tablename__ = "refresh_tokens"
+
+    jti = Column(String, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True))
+
+
 class LoginCode(Base):
     """One-time code handed to the frontend after an OAuth callback, exchanged for JWTs."""
     __tablename__ = "login_codes"

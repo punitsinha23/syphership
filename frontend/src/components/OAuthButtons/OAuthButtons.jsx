@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom"
 import { providerLoginUrl } from "../../api/auth"
 import "./OAuthButtons.css"
 
@@ -22,7 +23,8 @@ export function OAuthButtons() {
             </a>
 
             <p className="oauth-note">
-                New here? Either button creates your account.
+                New here? Either button creates your account, and you agree to the{" "}
+                <Link to="/terms">Terms</Link> and <Link to="/privacy">Privacy Policy</Link>.
             </p>
         </div>
     )

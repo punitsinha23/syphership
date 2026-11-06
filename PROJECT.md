@@ -121,7 +121,7 @@ GitHub Repo ──► Syphership API ──► Redis Queue ──► Build Worke
 | 4 | First Real Deployment | ✅ Done | — |
 | 5 | Redis Queue + Scalable Workers | ✅ Done | Finished Nov 3 |
 | 6 | Security Hardening + Push-to-Deploy | ✅ Done | Finished Nov 6 |
-| 7 | Production Launch (URLs, HTTPS, logs, CI/CD, docs) | ⏳ Next | New date to be set |
+| 7 | Production Launch (URLs, HTTPS, logs, CI/CD, docs) | ⏳ Next | Launch Nov 10 |
 
 Rule: if a phase runs over its dates, cut its **Stretch** tasks — do not push the next phase.
 
@@ -269,8 +269,15 @@ git push ──► GitHub ──► POST /github/webhook ──► verify HMAC �
 
 ### Must — Container hardening (moved from Phase 6)
 
-- [ ] Refresh token rotation
-- [ ] Mark `RUNNING` deployments as failed when their container has died
+- [x] Refresh token rotation
+- [x] Mark `RUNNING` deployments as failed when their container has died
+
+### Must — Product pages and access
+
+- [x] Docs page
+- [x] Account settings, including delete account
+- [x] Privacy and Terms pages (drafts; review before going public)
+- [x] Invite-only sign-up (`ALLOWED_EMAILS`)
 
 ### Must — Live URLs + HTTPS
 
@@ -292,7 +299,7 @@ Internet ──► DNS (*.apps.<domain>) ──► Caddy :443 ──► <project
 ### Must — Observability
 
 - [ ] Structured JSON logs with `request_id` and `deployment_id` carried from API to worker (through the job payload)
-- [ ] `/health` (liveness) and `/ready` (DB + Redis reachable) endpoints
+- [x] `/health` (liveness) and `/ready` (DB + Redis reachable) endpoints
 - [ ] `/metrics` in Prometheus format: request count/latency, deployments by status, build duration, queue depth
 
 ### Must — CI/CD and hosting
@@ -306,7 +313,7 @@ Internet ──► DNS (*.apps.<domain>) ──► Caddy :443 ──► <project
 
 - [ ] `README.md`: what it is, screenshot/GIF, architecture diagram, how to run locally, live demo link
 - [ ] `docs/ARCHITECTURE.md`: components, deployment flow, state machine, queue semantics, scaling story
-- [ ] `docs/SECURITY.md` (from Phase 6)
+- [x] `docs/SECURITY.md` (from Phase 6)
 - [ ] Short demo video
 - [ ] Resume bullets written (Section 13)
 
@@ -483,7 +490,7 @@ Only list what is actually implemented and understood.
 **Phase:** 7 — Production Launch
 **Done:** Phases 0–6 (Phase 6 finished 2026-11-06)
 **Next:** Pick a VPS and domain, then `compose.prod.yaml` and Caddy
-**Launch target:** 2026-10-31 (passed; new date to be set)
+**Launch target:** 2026-11-10
 
 ---
 

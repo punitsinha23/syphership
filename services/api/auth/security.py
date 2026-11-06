@@ -49,11 +49,11 @@ def verify_token(token: str, token_type: str):
         return None
 
 
-def create_session_tokens(user_id: int) -> dict:
+def create_session_tokens(user_id: int, jti: str | None = None) -> dict:
     sub = str(user_id)
     return {
         "access_token": create_token({"sub": sub}, ACCESS_TOKEN_TTL, "access"),
-        "refresh_token": create_token({"sub": sub}, REFRESH_TOKEN_TTL, "refresh"),
+        "refresh_token": create_token({"sub": sub, "jti": jti}, REFRESH_TOKEN_TTL, "refresh"),
         "token_type": "bearer",
     }
 

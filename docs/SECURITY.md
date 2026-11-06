@@ -76,7 +76,8 @@ USER toor, with UID 0 in /etc/passwd   → passes the image check, refused by th
 ## Open work
 
 - **#2 Stronger isolation:** containers share the host kernel, so Docker alone is not strong isolation for untrusted code. Launch is invite-only. Consider gVisor or user namespace remapping on the server.
-- **Tokens:** access tokens last 1 hour and refresh tokens 7 days. Refresh token rotation is not built yet (Phase 7).
+- **Tokens:** access tokens last 1 hour and refresh tokens 7 days. Each refresh token works once, and reusing one more than 30 seconds later ends all of that user's sessions. Tokens are kept in the browser's local storage, so a cross-site scripting bug could expose them.
+- **Sign-ups:** set `ALLOWED_EMAILS` in production. If it's empty, anyone can create an account.
 - **Env vars:** values are encrypted at rest and never returned by the API, but they are visible to the host through `docker inspect` and in the worker's `docker run` arguments.
 - **#6 Server logs:** tracebacks from unexpected errors (`logger.exception`) are not scrubbed. Users never see them, but anyone reading the worker logs could.
 - **#7 Key separation:** use a dedicated encryption key instead of deriving it from `SECRET_KEY`, so rotating one doesn't break the other.

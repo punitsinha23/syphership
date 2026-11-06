@@ -23,7 +23,8 @@ ALLOWED_TRANSITIONS = {
         DeploymentStatus.FAILED
     ],
     DeploymentStatus.RUNNING: [
-        DeploymentStatus.STOPPED
+        DeploymentStatus.STOPPED,
+        DeploymentStatus.FAILED
     ],
     DeploymentStatus.FAILED: [],
     DeploymentStatus.STOPPED: []

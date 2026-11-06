@@ -3,11 +3,13 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.user import User, OAuthAccount
-from schemas.user import CodeExchange, RefreshToken
-from auth.security import create_token, verify_token, create_session_tokens, ACCESS_TOKEN_TTL
+from schemas.user import CodeExchange, DeleteAccount, RefreshToken
+from auth.security import verify_token
+from auth.sessions import end_session, issue_session, rotate_session
 from auth.dependencies import get_current_user, get_user_by_sub
 from auth.oauth import redeem_login_code
-from services.rate_limit import limit_by_ip
+from services.account import delete_account
+from services.rate_limit import limit_by_ip, limit_by_user
 
 
 router = APIRouter(prefix="/auth")
@@ -24,7 +26,7 @@ def exchange_login_code(body: CodeExchange, db: Session = Depends(get_db)):
             detail="Sign-in link is invalid or has expired. Please sign in again."
         )
 
-    return create_session_tokens(user_id)
+    return issue_session(db, user_id)
 
 
 @router.get("/me")
@@ -45,7 +47,8 @@ def get_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)
 
 @router.post("/refresh", dependencies=[Depends(limit_by_ip("refresh", 30))])
 def refresh_token(refresh_token: RefreshToken, db: Session = Depends(get_db)):
-    payload = verify_token(refresh_token.refresh_token , "refresh")
+    """Trade a refresh token for a new pair. Each refresh token works once."""
+    payload = verify_token(refresh_token.refresh_token, "refresh")
 
     if payload is None:
         raise HTTPException(
@@ -61,7 +64,32 @@ def refresh_token(refresh_token: RefreshToken, db: Session = Depends(get_db)):
             detail="User not found"
         )
 
-    new_access_token = create_token({'sub': str(user.id)}, ACCESS_TOKEN_TTL, "access")
-    return {
-        "access_token": new_access_token,
-        "token_type": "bearer" }
+    tokens = rotate_session(db, user.id, payload.get("jti"))
+
+    if tokens is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token"
+        )
+
+    return tokens
+
+
+@router.post("/logout", dependencies=[Depends(limit_by_ip("logout", 30))])
+def logout(refresh_token: RefreshToken, db: Session = Depends(get_db)):
+    payload = verify_token(refresh_token.refresh_token, "refresh")
+
+    if payload is not None:
+        end_session(db, payload.get("jti"))
+
+    return {"message": "Signed out"}
+
+
+@router.delete("/me", dependencies=[Depends(limit_by_user("delete-account", 5))])
+def delete_me(body: DeleteAccount, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Typing the username guards against a stray request or a slip of the mouse.
+    if body.confirm_username != user.username:
+        raise HTTPException(status_code=422, detail="Type your username to confirm.")
+
+    delete_account(db, user)
+    return {"message": "Account deleted"}

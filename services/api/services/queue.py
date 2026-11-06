@@ -10,6 +10,8 @@ STREAM = "deployments"
 GROUP = "builders"
 DEAD_STREAM = "deployments:dead"
 ACTION_CLEANUP = "cleanup"
+APP_CHECK_KEY = "workers:app-check"
+APP_CHECK_SECONDS = 60
 # Must be longer than the slowest deployment (docker build alone can take 10 min).
 RECLAIM_IDLE_MS = 15 * 60 * 1000
 MAX_DELIVERIES = 3

@@ -152,3 +152,33 @@ def test_cleanup_delivered_too_often_is_dead_lettered_without_failing_anything(j
     assert jobs == []
     assert pending_count() == 0
     assert dead_letters() == [{"action": "cleanup", "deployment_id": "7"}]
+
+
+TEST_CHECK_KEY = "test:workers:app-check"
+
+
+@pytest.fixture
+def app_checks(monkeypatch):
+    calls = []
+    monkeypatch.setattr(worker, "APP_CHECK_KEY", TEST_CHECK_KEY)
+    monkeypatch.setattr(worker, "fail_dead_deployments", lambda: calls.append("checked"))
+    queue.redis_client.delete(TEST_CHECK_KEY)
+    yield calls
+    queue.redis_client.delete(TEST_CHECK_KEY)
+
+
+def test_only_one_worker_checks_apps_per_minute(app_checks):
+    worker.check_apps_if_due()
+    worker.check_apps_if_due()
+
+    assert app_checks == ["checked"]
+    assert 0 < queue.redis_client.ttl(TEST_CHECK_KEY) <= queue.APP_CHECK_SECONDS
+
+
+def test_failed_app_check_does_not_stop_the_worker(app_checks, monkeypatch):
+    def docker_down():
+        raise RuntimeError("Docker could not inspect the container.")
+
+    monkeypatch.setattr(worker, "fail_dead_deployments", docker_down)
+
+    worker.check_apps_if_due()

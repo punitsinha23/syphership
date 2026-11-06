@@ -19,7 +19,7 @@ const NEXT = [
     "Stable URLs per project, with HTTPS",
     "Live log streaming while a build runs",
     "Monitoring and automatic tests on every change",
-    "Account settings, including deleting your account",
+    "Rollback to an earlier deployment",
 ]
 
 const PRINCIPLES = [

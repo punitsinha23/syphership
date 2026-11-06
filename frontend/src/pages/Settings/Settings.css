@@ -1,0 +1,57 @@
+.settings-list {
+  margin: 0;
+}
+
+.settings-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+}
+
+.settings-list > div:last-child {
+  border-bottom: 0;
+}
+
+.settings-list dt {
+  color: var(--color-text-muted);
+}
+
+.settings-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.settings-link {
+  color: var(--color-accent);
+  font-size: 13px;
+}
+
+.settings-muted {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.settings-danger {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px;
+}
+
+.settings-danger p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.settings-danger .field {
+  width: 100%;
+  max-width: 360px;
+}

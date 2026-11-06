@@ -23,10 +23,14 @@ async function refreshAccessToken() {
     const data = await response.json()
 
     if (!response.ok) {
+        // Refresh tokens work once. Another tab may have just used this one
+        if (localStorage.getItem("refresh_token") !== refreshToken) {
+            return localStorage.getItem("access_token")
+        }
         throw new Error(data.detail || "Token refresh failed")
     }
 
-    localStorage.setItem("access_token", data.access_token)
+    saveSession(data)
 
     return data.access_token
 }
@@ -39,6 +43,22 @@ export function saveSession({ access_token, refresh_token }) {
 export function clearSession() {
     localStorage.removeItem("access_token")
     localStorage.removeItem("refresh_token")
+}
+
+// End the session on the server too, so its refresh token can't be used again
+export function signOut() {
+    const refreshToken = localStorage.getItem("refresh_token")
+    clearSession()
+
+    if (refreshToken) {
+        fetch(`${API_URL}/auth/logout`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ refresh_token: refreshToken })
+        }).catch(() => {})
+    }
 }
 
 function logout() {

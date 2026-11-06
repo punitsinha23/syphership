@@ -162,8 +162,10 @@
   .navbar {
     position: sticky;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
+    justify-content: space-between;
+    gap: 8px 12px;
     width: auto;
     bottom: auto;
     /* Bleed to the screen edges past .app-page's mobile padding */
@@ -185,10 +187,14 @@
     height: 20px;
   }
 
+  /* Links get their own row, and scroll sideways if they still don't fit */
   .navbar-links {
+    flex: 1 0 100%;
     flex-direction: row;
-    flex: 1;
-    justify-content: center;
+    order: 3;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
   .navbar-link {

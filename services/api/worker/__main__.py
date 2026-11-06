@@ -8,6 +8,8 @@ from services.queue import (
     ensure_group,
     redis_client,
     ACTION_CLEANUP,
+    APP_CHECK_KEY,
+    APP_CHECK_SECONDS,
     GROUP,
     STREAM,
     RECLAIM_IDLE_MS,
@@ -15,7 +17,12 @@ from services.queue import (
     delivery_count,
     dead_letters,
 )
-from services.deployment_runner import run_deployment, recover_deployment, fail_dead_lettered
+from services.deployment_runner import (
+    fail_dead_deployments,
+    fail_dead_lettered,
+    recover_deployment,
+    run_deployment,
+)
 from services.docker_services import ensure_network, remove_deployment_resources
 
 
@@ -130,6 +137,20 @@ def poll_once() -> None:
         handle_new(*response[0][1][0])
 
 
+def check_apps_if_due() -> None:
+    """Look for dead apps once a minute, across all workers."""
+
+    # The key expires by itself, so whichever worker sets it does the check.
+    if not redis_client.set(APP_CHECK_KEY, "1", nx=True, ex=APP_CHECK_SECONDS):
+        return
+
+    try:
+        fail_dead_deployments()
+    except Exception:
+        # A failed check must not stop the worker from building.
+        logger.exception("Could not check running apps.")
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     signal.signal(signal.SIGTERM, request_stop)
@@ -139,6 +160,7 @@ def main() -> None:
     logger.info("Worker %s started.", CONSUMER)
     while not stopping:
         poll_once()
+        check_apps_if_due()
     logger.info("Worker %s stopped.", CONSUMER)
 
 

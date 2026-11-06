@@ -302,6 +302,7 @@ def test_get_container_status_timeout(mock_run, mock_which):
     side_effect=subprocess.CalledProcessError(
         returncode=1,
         cmd="docker inspect",
+        stderr="Error: No such object: missing-container",
     ),
 )
 def test_get_container_status_failure(mock_run, mock_which):
@@ -310,6 +311,21 @@ def test_get_container_status_failure(mock_run, mock_which):
         match="Docker container was not found",
     ):
         get_container_status("missing-container")
+
+
+@patch("services.docker_services.shutil.which", return_value="/usr/bin/docker")
+@patch(
+    "services.docker_services.subprocess.run",
+    side_effect=subprocess.CalledProcessError(
+        returncode=1,
+        cmd="docker inspect",
+        stderr="Cannot connect to the Docker daemon",
+    ),
+)
+def test_get_container_status_when_docker_is_down(mock_run, mock_which):
+    # Must not look like a missing container, or every app would be marked dead.
+    with pytest.raises(RuntimeError, match="could not inspect"):
+        get_container_status("abc")
 
 
 @patch("services.docker_services.subprocess.run")

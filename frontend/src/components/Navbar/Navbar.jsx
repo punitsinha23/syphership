@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom"
 import { Logo } from "../Logo/Logo"
 import { getUser } from "../../api/user"
-import { clearSession } from "../../api/client"
+import { signOut } from "../../api/client"
 import { useEffect, useState } from "react"
 import "./Navbar.css"
 
@@ -21,6 +21,16 @@ const LINKS = [
         label: "Projects",
         icon: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
     },
+    {
+        to: "/docs",
+        label: "Docs",
+        icon: <path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7" />,
+    },
+    {
+        to: "/settings",
+        label: "Settings",
+        icon: <path d="M4 7h10M18 7h2M4 17h2M10 17h10M16 5v4M8 15v4" />,
+    },
 ]
 
 export function Navbar() {
@@ -32,7 +42,7 @@ export function Navbar() {
     }, [])
 
     function handleLogout() {
-        clearSession()
+        signOut()
         navigate("/")
     }
 

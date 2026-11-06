@@ -25,6 +25,14 @@ LOGIN_CODE_TTL = timedelta(seconds=60)
 
 PROVIDER_NAMES = {"github": "GitHub", "google": "Google"}
 
+# Invite-only: when set, only these emails can create an account. Existing
+# users can always sign in. Empty means anyone can sign up.
+ALLOWED_EMAILS = {
+    email.strip().lower()
+    for email in os.getenv("ALLOWED_EMAILS", "").split(",")
+    if email.strip()
+}
+
 
 class OAuthError(Exception):
     """A sign-in failure whose message is safe to show to the user."""
@@ -194,6 +202,9 @@ def sign_in_with_provider(
         user = db.query(User).filter(User.email == email).first()
 
         if user is None:
+            if ALLOWED_EMAILS and email not in ALLOWED_EMAILS:
+                raise OAuthError("Syphership is invite-only right now, and this email isn't on the list.")
+
             user = User(
                 email=email,
                 username=unique_username(db, username_hint),

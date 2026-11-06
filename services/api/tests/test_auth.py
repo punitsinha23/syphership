@@ -1,11 +1,14 @@
+from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
 import pytest
 
+import auth.oauth
+import auth.sessions
 import github.routes
 import google_oauth.routes
-from auth.oauth import FRONTEND_URL
-from auth.security import create_token, decrypt_secret
+from auth.oauth import FRONTEND_URL, OAuthError
+from auth.security import create_session_tokens, create_token, decrypt_secret
 from models.user import OAuthAccount
 from tests.conftest import TestingSessionLocal
 
@@ -268,3 +271,95 @@ def test_access_token_rejected_as_refresh(client, monkeypatch):
     response = client.post("/auth/refresh", json={"refresh_token": tokens["access_token"]})
 
     assert response.status_code == 401
+
+
+def refresh(client, token):
+    return client.post("/auth/refresh", json={"refresh_token": token})
+
+
+def test_refresh_returns_a_new_refresh_token(client, monkeypatch):
+    tokens = oauth_sign_in(client, monkeypatch, "github", github_identity())
+
+    new_tokens = refresh(client, tokens["refresh_token"]).json()
+
+    assert new_tokens["refresh_token"] != tokens["refresh_token"]
+    assert refresh(client, new_tokens["refresh_token"]).status_code == 200
+
+
+def test_refresh_token_only_works_once(client, monkeypatch):
+    tokens = oauth_sign_in(client, monkeypatch, "github", github_identity())
+    refresh(client, tokens["refresh_token"])
+
+    assert refresh(client, tokens["refresh_token"]).status_code == 401
+
+
+def test_reused_refresh_token_within_grace_keeps_the_session(client, monkeypatch):
+    # Two browser tabs refreshing at once shouldn't sign the user out.
+    tokens = oauth_sign_in(client, monkeypatch, "github", github_identity())
+    new_tokens = refresh(client, tokens["refresh_token"]).json()
+
+    refresh(client, tokens["refresh_token"])
+
+    assert refresh(client, new_tokens["refresh_token"]).status_code == 200
+
+
+def test_stolen_refresh_token_ends_every_session(client, monkeypatch):
+    tokens = oauth_sign_in(client, monkeypatch, "github", github_identity())
+    new_tokens = refresh(client, tokens["refresh_token"]).json()
+    monkeypatch.setattr(auth.sessions, "REUSE_GRACE", timedelta(seconds=-1))
+
+    assert refresh(client, tokens["refresh_token"]).status_code == 401
+
+    assert refresh(client, new_tokens["refresh_token"]).status_code == 401
+
+
+def test_refresh_token_without_a_record_is_rejected(client, make_user):
+    token = create_session_tokens(make_user())["refresh_token"]
+
+    assert refresh(client, token).status_code == 401
+
+
+def test_logout_ends_the_session(client, monkeypatch):
+    tokens = oauth_sign_in(client, monkeypatch, "github", github_identity())
+
+    assert client.post("/auth/logout", json={"refresh_token": tokens["refresh_token"]}).status_code == 200
+
+    assert refresh(client, tokens["refresh_token"]).status_code == 401
+
+
+def test_invite_only_blocks_a_new_email(client, monkeypatch):
+    monkeypatch.setattr(auth.oauth, "ALLOWED_EMAILS", {"invited@example.com"})
+
+    with pytest.raises(OAuthError, match="invite-only"):
+        sign_in(email="stranger@example.com")
+
+
+def test_invite_only_allows_a_listed_email(client, monkeypatch):
+    monkeypatch.setattr(auth.oauth, "ALLOWED_EMAILS", {"invited@example.com"})
+
+    assert sign_in(email="Invited@Example.com").email == "invited@example.com"
+
+
+def test_invite_only_still_lets_existing_users_in(client, monkeypatch):
+    sign_in(email="early@example.com")
+    monkeypatch.setattr(auth.oauth, "ALLOWED_EMAILS", {"invited@example.com"})
+
+    assert sign_in(email="early@example.com").email == "early@example.com"
+
+
+def sign_in(email):
+    db = TestingSessionLocal()
+    try:
+        user = auth.oauth.sign_in_with_provider(
+            db,
+            provider="github",
+            provider_user_id=email.lower(),
+            email=email,
+            username_hint="someone",
+            avatar_url=None,
+            access_token=None,
+        )
+        db.expunge(user)
+        return user
+    finally:
+        db.close()
