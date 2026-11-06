@@ -591,3 +591,43 @@ def test_run_container_passes_env_vars_as_single_arguments(mock_run, mock_which)
 
     command = mock_run.call_args.args[0]
     assert command[command.index("--env") + 1] == "NOTE=a b; rm -rf /"
+
+
+@pytest.mark.parametrize("user", ["", "root", "0", "root:root", "0:0"])
+@patch("services.docker_services.subprocess.run")
+def test_check_image_user_rejects_root(mock_run, user):
+    mock_run.return_value = MagicMock(stdout=f"{user}\n")
+
+    with pytest.raises(DeploymentError, match="must not run as root"):
+        docker_services.check_image_user("app:latest")
+
+
+@pytest.mark.parametrize("user", ["app", "10001", "app:app", "10001:10001"])
+@patch("services.docker_services.subprocess.run")
+def test_check_image_user_allows_non_root(mock_run, user):
+    mock_run.return_value = MagicMock(stdout=f"{user}\n")
+
+    docker_services.check_image_user("app:latest")
+
+
+@patch("services.docker_services.subprocess.run")
+def test_check_container_user_catches_uid_0_under_another_name(mock_run):
+    mock_run.return_value = MagicMock(stdout="PID   UID\n100   1000\n101   0\n")
+
+    with pytest.raises(DeploymentError, match="must not run as root"):
+        docker_services.check_container_user("abc")
+
+
+@patch("services.docker_services.subprocess.run")
+def test_check_container_user_allows_non_root(mock_run):
+    mock_run.return_value = MagicMock(stdout="PID   UID\n100   1000\n101   1000\n")
+
+    docker_services.check_container_user("abc")
+
+
+@patch("services.docker_services.subprocess.run")
+def test_check_container_user_when_container_is_gone(mock_run):
+    mock_run.side_effect = subprocess.CalledProcessError(1, "docker")
+
+    with pytest.raises(DeploymentError, match="stopped right after starting"):
+        docker_services.check_container_user("abc")

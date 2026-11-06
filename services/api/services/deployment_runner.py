@@ -19,7 +19,9 @@ from services.docker_services import (
     build_docker_image,
     run_docker_container,
     get_container_status,
+    check_container_user,
     check_image_size,
+    check_image_user,
     get_exposed_port,
     get_host_port,
     remove_deployment_resources,
@@ -242,6 +244,7 @@ def run_deployment(deployment_id: int) -> None:
             )
             deployment.build_logs = scrub(build_logs, token)
             check_image_size(image_tag)
+            check_image_user(image_tag)
 
             # Read the port the app listens on from the Dockerfile's EXPOSE.
             container_port = get_exposed_port(image_tag)
@@ -272,6 +275,8 @@ def run_deployment(deployment_id: int) -> None:
                     "The container exited right after starting. "
                     "Make sure your Dockerfile's CMD runs a long-lived process."
                 )
+
+            check_container_user(container_id)
 
             # Find the host port Docker picked and store the URL.
             host_port = get_host_port(container_id, container_port)

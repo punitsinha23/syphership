@@ -33,7 +33,7 @@ Status: ✅ done · 🟡 partial · ❌ open
 | # | Attack | Attacker | Mitigation | Status |
 |---|---|---|---|---|
 | 1 | Deployed app connects to Redis/Postgres through the host gateway (`172.17.0.1`) | 1 | Postgres and Redis published on `127.0.0.1` only; apps run on their own network `syphership-apps` | ✅ |
-| 2 | Deployed app uses root powers or escapes the container | 1 | `--cap-drop ALL`, `--security-opt no-new-privileges`; no volumes or Docker socket mounted into apps | 🟡 |
+| 2 | Deployed app uses root powers or escapes the container | 1 | Apps must run as non-root: images with no `USER` or with root are refused, and any process really running as UID 0 fails the deployment (`docker top`, which also catches another username with UID 0). `--cap-drop ALL` and `--security-opt no-new-privileges` stop a non-root process becoming root; no volumes or Docker socket mounted into apps | ✅ |
 | 3 | App uses all CPU/memory/processes and starves the host | 1 | `--cpus 0.5`, `--memory 256m`, `--memory-swap 256m`, `--pids-limit 256` | ✅ |
 | 4 | User reads another user's project/deployment/logs by changing the ID in the URL (IDOR) | 2 | Every query filters by `Project.user_id == user.id`; returns 404 (not 403) so IDs can't be probed | ✅ |
 | 5 | Repo, branch or SHA used to inject shell commands or git options | 1 | All `subprocess` calls use argument lists, never `shell=True`; clone only accepts HTTPS `github.com` URLs ending in `.git`; SHAs must be 40 lowercase hex characters; repo names must be `owner/name`; branch names can't start with `-` or hold characters git refuses | ✅ |
@@ -63,11 +63,19 @@ From inside a real deployment on `syphership-apps`, connections to `172.20.0.1` 
 chown 1:1 /www/index.html  → Operation not permitted
 ```
 
+**#2 — root refused.** Against real Docker images:
+
+```text
+Djangotodo (USER app)                  → allowed
+nginx (no USER, runs as root)          → refused by the image check
+USER toor, with UID 0 in /etc/passwd   → passes the image check, refused by the running check
+```
+
 ---
 
 ## Open work
 
-- **#2 Non-root (decided: not enforced at launch):** `--user` breaks images that bind port 80 or write to `/root`, so apps may run as root inside the container, with all capabilities dropped. This is an accepted risk until it is tested on real images. Dropped capabilities may also stop some images (such as nginx) from starting; to be checked in Phase 7. Because Docker alone is not strong isolation for untrusted code, launch is invite-only.
+- **#2 Stronger isolation:** containers share the host kernel, so Docker alone is not strong isolation for untrusted code. Launch is invite-only. Consider gVisor or user namespace remapping on the server.
 - **Tokens:** access tokens last 1 hour and refresh tokens 7 days. Refresh token rotation is not built yet (Phase 7).
 - **Env vars:** values are encrypted at rest and never returned by the API, but they are visible to the host through `docker inspect` and in the worker's `docker run` arguments.
 - **#6 Server logs:** tracebacks from unexpected errors (`logger.exception`) are not scrubbed. Users never see them, but anyone reading the worker logs could.

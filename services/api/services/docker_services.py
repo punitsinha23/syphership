@@ -16,6 +16,11 @@ CONTAINER_PIDS_LIMIT = os.getenv("DEPLOYMENT_PIDS_LIMIT", "256")
 # Bigger images are refused after the build, so one app can't fill the disk.
 MAX_IMAGE_BYTES = int(os.getenv("DEPLOYMENT_MAX_IMAGE_MB", "2048")) * 1024 * 1024
 
+NON_ROOT_REQUIRED = (
+    "Your app must not run as root. Add a USER line to your Dockerfile "
+    "and give that user the files it needs to write."
+)
+
 # User apps get their own network, away from the default one.
 DEPLOYMENT_NETWORK = os.getenv("DEPLOYMENT_NETWORK", "syphership-apps")
 
@@ -148,6 +153,54 @@ def check_image_size(image_tag: str) -> None:
     if int(result.stdout.strip()) > MAX_IMAGE_BYTES:
         limit_mb = MAX_IMAGE_BYTES // (1024 * 1024)
         raise DeploymentError(f"The image is larger than the {limit_mb} MB limit.")
+
+
+def check_image_user(image_tag: str) -> None:
+    """Raise DeploymentError if the image plainly runs as root.
+
+    Runs before the container starts, to give a clear error. A fixed --user
+    isn't used because it wouldn't own the files the image created."""
+    try:
+        result = subprocess.run(
+            ["docker", "image", "inspect", "--format", "{{.Config.User}}", image_tag],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Docker image inspection timed out.") from None
+    except subprocess.CalledProcessError:
+        raise RuntimeError("Docker image was not found") from None
+
+    user = result.stdout.strip().split(":")[0]
+    if user in ("", "root", "0"):
+        raise DeploymentError(NON_ROOT_REQUIRED)
+
+
+def check_container_user(container_id: str) -> None:
+    """Raise DeploymentError if any process in the container runs as UID 0.
+
+    The image check can be fooled by a differently named user with UID 0, so
+    this asks Docker what really runs. With capabilities dropped and
+    no-new-privileges set, a non-root process can't become root later."""
+    try:
+        result = subprocess.run(
+            # Docker needs the pid column, even though only uid is used.
+            ["docker", "top", container_id, "-o", "pid,uid"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Docker container inspection timed out.") from None
+    except subprocess.CalledProcessError:
+        raise DeploymentError("The container stopped right after starting.") from None
+
+    uids = [line.split()[1] for line in result.stdout.strip().splitlines()[1:]]
+    if "0" in uids:
+        raise DeploymentError(NON_ROOT_REQUIRED)
 
 
 def run_docker_container(

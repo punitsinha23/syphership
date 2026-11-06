@@ -73,6 +73,8 @@ def pipeline(monkeypatch, tmp_path):
         record("build", ("syphership-deployment-1:latest", "#1 DONE\n")),
     )
     monkeypatch.setattr(runner, "check_image_size", record("image_size"))
+    monkeypatch.setattr(runner, "check_image_user", record("image_user"))
+    monkeypatch.setattr(runner, "check_container_user", record("container_user"))
     monkeypatch.setattr(runner, "get_exposed_port", record("exposed_port", 80))
     monkeypatch.setattr(runner, "run_docker_container", record("run", "abc123container"))
     monkeypatch.setattr(runner, "get_container_status", record("status", "running"))
@@ -110,9 +112,11 @@ def test_successful_deployment_is_running_with_url(make_user, pipeline):
         "clone",
         "build",
         "image_size",
+        "image_user",
         "exposed_port",
         "run",
         "status",
+        "container_user",
         "host_port",
         "health",
     ]
@@ -549,4 +553,29 @@ def test_oversized_image_fails_before_it_runs(make_user, pipeline, monkeypatch):
     assert deployment.status == DeploymentStatus.FAILED
     assert "larger than" in deployment.failure_reason
     assert "run" not in pipeline["calls"]
+    assert deployment_id in pipeline["removed"]
+
+
+def test_root_image_fails_before_it_runs(make_user, pipeline, monkeypatch):
+    deployment_id = create_queued_deployment(make_user)
+    monkeypatch.setattr(runner, "check_image_user", fail_with(DeploymentError("Your app must not run as root.")))
+
+    runner.run_deployment(deployment_id)
+
+    deployment = get_deployment(deployment_id)
+    assert deployment.status == DeploymentStatus.FAILED
+    assert "must not run as root" in deployment.failure_reason
+    assert "run" not in pipeline["calls"]
+
+
+def test_container_really_running_as_root_is_removed(make_user, pipeline, monkeypatch):
+    deployment_id = create_queued_deployment(make_user)
+    monkeypatch.setattr(runner, "check_container_user", fail_with(DeploymentError("Your app must not run as root.")))
+
+    runner.run_deployment(deployment_id)
+
+    deployment = get_deployment(deployment_id)
+    assert deployment.status == DeploymentStatus.FAILED
+    assert deployment.url is None
+    assert "health" not in pipeline["calls"]
     assert deployment_id in pipeline["removed"]

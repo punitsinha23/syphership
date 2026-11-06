@@ -119,9 +119,9 @@ GitHub Repo ──► Syphership API ──► Redis Queue ──► Build Worke
 | 2 | Frontend MVP | ✅ Done | — |
 | 3 | GitHub Integration | ✅ Done | — |
 | 4 | First Real Deployment | ✅ Done | — |
-| 5 | Redis Queue + Scalable Workers | ⏳ Next | Oct 17 – Oct 21 |
-| 6 | Security Hardening + Push-to-Deploy | ⬜ | Oct 22 – Oct 26 |
-| 7 | Production Launch (URLs, HTTPS, logs, CI/CD, docs) | ⬜ | Oct 27 – Oct 31 |
+| 5 | Redis Queue + Scalable Workers | ✅ Done | Finished Nov 3 |
+| 6 | Security Hardening + Push-to-Deploy | ✅ Done | Finished Nov 6 |
+| 7 | Production Launch (URLs, HTTPS, logs, CI/CD, docs) | ⏳ Next | New date to be set |
 
 Rule: if a phase runs over its dates, cut its **Stretch** tasks — do not push the next phase.
 
@@ -211,7 +211,7 @@ Concepts to learn: producer, consumer, consumer group, ack, at-least-once delive
 
 ---
 
-## Phase 6 — Security Hardening + Push-to-Deploy
+## Phase 6 — Security Hardening + Push-to-Deploy ✅
 
 **Dates:** Oct 22 – Oct 26
 
@@ -221,7 +221,7 @@ A PaaS runs strangers' code on your machine. This phase is what makes the projec
 
 ### Must — Untrusted code isolation
 
-- [ ] Deployed containers run as non-root (open), `--cap-drop=ALL` ✅, `--security-opt=no-new-privileges`, `--pids-limit`, memory/CPU limits (already have limits)
+- [x] Deployed containers must run as non-root (root images are refused), with `--cap-drop=ALL`, `--security-opt=no-new-privileges`, `--pids-limit`, memory/CPU limits
 - [x] Deployed apps run on a separate Docker network: they **cannot** reach PostgreSQL, Redis, the API, or the Docker socket
 - [x] Only the worker has access to the Docker socket; the API never does (document why: socket = root on host)
 - [x] Limits: max repo size, build timeout (Phase 5), max image size, max running apps per user
@@ -229,7 +229,7 @@ A PaaS runs strangers' code on your machine. This phase is what makes the projec
 ### Must — Secrets and data
 
 - [x] Encrypt OAuth access tokens at rest (Fernet, key derived from `SECRET_KEY`)
-- [ ] Private repos: request repo scope (or GitHub App), clone with the token **without** it appearing in build logs, error messages, or `git remote -v`
+- [x] Private repos: request repo scope (or GitHub App), clone with the token **without** it appearing in build logs, error messages, or `git remote -v`
 - [x] Scrub secrets from build logs and API errors (test it)
 - [x] Per-project environment variables, encrypted at rest, injected at `docker run`, shown masked in the UI
 
@@ -266,6 +266,11 @@ git push ──► GitHub ──► POST /github/webhook ──► verify HMAC �
 **Dates:** Oct 27 – Oct 31
 
 **Goal:** Run Syphership on the internet with real URLs and HTTPS, live logs, basic observability, CI, and documentation good enough for a resume and interviews.
+
+### Must — Container hardening (moved from Phase 6)
+
+- [ ] Refresh token rotation
+- [ ] Mark `RUNNING` deployments as failed when their container has died
 
 ### Must — Live URLs + HTTPS
 
@@ -375,7 +380,7 @@ POST /auth/exchange           POST /auth/refresh         GET  /auth/me
 # GitHub
 GET  /github/repos
 GET  /github/repos/{owner}/{repo}/branches
-POST /github/webhook                         # Phase 6
+POST /github/webhook/{project_id}            # Phase 6
 
 # Projects
 GET /projects   POST /projects   GET /projects/{id}   PUT /projects/{id}   DELETE /projects/{id}
@@ -475,11 +480,11 @@ Only list what is actually implemented and understood.
 
 ## Current Status
 
-**Phase:** 6 — Security Hardening + Push-to-Deploy
-**Done:** Phases 0–5 (Phase 5 finished 2026-11-03)
-**Next:** Finish Phase 6 checks (real webhook test, private repo deploy), then Phase 7
+**Phase:** 7 — Production Launch
+**Done:** Phases 0–6 (Phase 6 finished 2026-11-06)
+**Next:** Pick a VPS and domain, then `compose.prod.yaml` and Caddy
 **Launch target:** 2026-10-31 (passed; new date to be set)
 
 ---
 
-**Last updated:** 2026-11-05
+**Last updated:** 2026-11-06
