@@ -17,7 +17,7 @@ export function DeploymentCard({ deployment, onDeleted }) {
         const warning = status === "RUNNING"
             ? "This deployment is live. Deleting it takes the site offline."
             : "This removes the deployment and its build logs."
-        if (!window.confirm(`Delete deployment #${deployment.id}?\n\n${warning}`)) return
+        if (!window.confirm(`Delete deployment ${shortSha(deployment.commit_sha)}?\n\n${warning}`)) return
 
         try {
             setDeleting(true)
@@ -35,13 +35,13 @@ export function DeploymentCard({ deployment, onDeleted }) {
             <div className="deployment-row-main">
                 <StatusBadge status={status} />
 
-                <Link className="deployment-row-title" to={`/deployments/${deployment.id}`}>
-                    Deployment #{deployment.id}
+                <Link
+                    className="deployment-row-title"
+                    to={`/deployments/${deployment.id}`}
+                    title={deployment.commit_sha}
+                >
+                    Deployment <code className="deployment-row-sha">{shortSha(deployment.commit_sha)}</code>
                 </Link>
-
-                <code className="deployment-row-sha" title={deployment.commit_sha}>
-                    {shortSha(deployment.commit_sha)}
-                </code>
 
                 <time
                     className="deployment-row-time"
@@ -64,7 +64,7 @@ export function DeploymentCard({ deployment, onDeleted }) {
                     <Link
                         className="btn btn-ghost btn-sm"
                         to={`/deployments/${deployment.id}`}
-                        aria-label={`View deployment #${deployment.id}`}
+                        aria-label={`View deployment ${shortSha(deployment.commit_sha)}`}
                     >
                         View
                     </Link>
@@ -73,7 +73,7 @@ export function DeploymentCard({ deployment, onDeleted }) {
                             className="btn btn-danger btn-sm"
                             onClick={handleDelete}
                             disabled={deleting}
-                            aria-label={`Delete deployment #${deployment.id}`}
+                            aria-label={`Delete deployment ${shortSha(deployment.commit_sha)}`}
                         >
                             {deleting ? "Deleting…" : "Delete"}
                         </button>

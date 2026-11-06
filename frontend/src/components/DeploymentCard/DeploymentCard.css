@@ -13,7 +13,7 @@
 
 .deployment-row-main {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) 80px 80px 232px;
+  grid-template-columns: 120px minmax(0, 1fr) 80px 232px;
   align-items: center;
   gap: 16px;
 }
@@ -78,7 +78,6 @@
     row-gap: 8px;
   }
 
-  .deployment-row-sha,
   .deployment-row-time {
     display: none;
   }

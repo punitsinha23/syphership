@@ -100,7 +100,7 @@ function DeploymentDetails() {
         const warning = deploymentDetails.status === "RUNNING"
             ? "This deployment is live. Deleting it takes the site offline."
             : "This removes the deployment and its build logs."
-        if (!window.confirm(`Delete deployment #${deploymentDetails.id}?\n\n${warning}`)) return
+        if (!window.confirm(`Delete deployment ${shortSha(deploymentDetails.commit_sha)}?\n\n${warning}`)) return
 
         try {
             setDeleting(true)
@@ -130,7 +130,7 @@ function DeploymentDetails() {
                         <span>…</span>
                     )}
                     <span className="breadcrumb-sep">/</span>
-                    <span>#{deployment_id}</span>
+                    <span>{d ? shortSha(d.commit_sha) : "…"}</span>
                 </nav>
 
                 {loading ? (
@@ -146,12 +146,11 @@ function DeploymentDetails() {
                         <header className="page-header">
                             <div className="page-header-main">
                                 <h1 className="page-title deployment-title">
-                                    Deployment #{d.id}
+                                    Deployment <code className="deployment-inline-sha">{shortSha(d.commit_sha)}</code>
                                     <StatusBadge status={d.status} />
                                 </h1>
                                 <p className="page-subtitle">
-                                    Commit <code className="deployment-inline-sha">{shortSha(d.commit_sha)}</code>
-                                    {" "}· created {timeAgo(d.created_at)}
+                                    Created {timeAgo(d.created_at)}
                                 </p>
                             </div>
 
