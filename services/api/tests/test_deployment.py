@@ -397,3 +397,25 @@ def test_deploys_are_limited_per_user(client, auth_headers, user2_headers, proje
 
     # Another user has their own counter (404: the project isn't theirs).
     assert deploy(client, user2_headers, project_id).status_code == 404
+
+
+def test_app_limit_blocks_a_new_project_but_not_a_redeploy(client, auth_headers, project_id, monkeypatch):
+    monkeypatch.setattr(services.deployment_services, "MAX_APPS_PER_USER", 1)
+    first = deploy(client, auth_headers, project_id).json()["id"]
+    set_status(first, DeploymentStatus.RUNNING)
+
+    other = create_project("auth@example.com", name="Second")
+    assert deploy(client, auth_headers, other).status_code == 403
+
+    # Redeploying replaces the running app, so it doesn't count against the limit.
+    assert deploy(client, auth_headers, project_id).status_code == 200
+
+
+def test_failed_apps_do_not_count_towards_the_limit(client, auth_headers, project_id, monkeypatch):
+    monkeypatch.setattr(services.deployment_services, "MAX_APPS_PER_USER", 1)
+    first = deploy(client, auth_headers, project_id).json()["id"]
+    set_status(first, DeploymentStatus.FAILED)
+
+    other = create_project("auth@example.com", name="Second")
+
+    assert deploy(client, auth_headers, other).status_code == 200

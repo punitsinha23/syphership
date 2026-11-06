@@ -19,10 +19,12 @@ from services.docker_services import (
     build_docker_image,
     run_docker_container,
     get_container_status,
+    check_image_size,
     get_exposed_port,
     get_host_port,
     remove_deployment_resources,
 )
+from services.env_vars import read_env_vars
 from services.errors import DeploymentError
 from services.health_service import wait_for_healthy
 from services.validation import scrub
@@ -239,6 +241,7 @@ def run_deployment(deployment_id: int) -> None:
                 deployment.id,
             )
             deployment.build_logs = scrub(build_logs, token)
+            check_image_size(image_tag)
 
             # Read the port the app listens on from the Dockerfile's EXPOSE.
             container_port = get_exposed_port(image_tag)
@@ -255,6 +258,7 @@ def run_deployment(deployment_id: int) -> None:
                 image_tag,
                 deployment.id,
                 container_port,
+                env_vars=read_env_vars(project),
             )
 
             save_container_id(deployment, container_id)

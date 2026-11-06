@@ -6,10 +6,14 @@ from database import get_db
 from models.user import User
 from models.deployment import Deployment
 from models.project import Project
-from schemas.project import ProjectCreate, ProjectResponse
+from schemas.project import EnvVarsResponse, EnvVarsUpdate, ProjectCreate, ProjectResponse
 from github.service import fetch_repo_config, get_github_token
+from github.webhook import create_webhook, delete_webhook
 from services.deployment_services import IN_PROGRESS_STATUSES
+from services.env_vars import MAX_ENV_VARS, read_env_vars, save_env_vars, validate_env_var
+from services.errors import DeploymentError
 from services.queue import publish_cleanup
+from services.rate_limit import limit_by_user
 
 
 router = APIRouter(prefix='/projects')
@@ -19,6 +23,7 @@ router = APIRouter(prefix='/projects')
 @router.post("/", response_model=ProjectResponse)
 def create_projects(project: ProjectCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     repo_fields = {}
+    token = None
 
     if project.repo_full_name:
         token = get_github_token(db, user)
@@ -30,12 +35,16 @@ def create_projects(project: ProjectCreate, db: Session = Depends(get_db), user:
         name = project.name,
         description = project.description,
         user_id = user.id,
+        auto_deploy = project.auto_deploy is not False,
         **repo_fields
     )
 
     db.add(new_project)
     db.commit()
     db.refresh(new_project)
+
+    if token:
+        create_webhook(db, new_project, token)
 
     return new_project
 
@@ -68,6 +77,13 @@ def update_project(project_id: int, project: ProjectCreate, db: Session = Depend
 
     db_project.name = project.name
     db_project.description = project.description
+    if project.auto_deploy is not None:
+        db_project.auto_deploy = project.auto_deploy
+
+    old_repo_id = db_project.repo_id
+    old_repo_name = db_project.repo_full_name
+    old_webhook_id = db_project.webhook_id
+    token = None
 
     # Omitted repo fields keep the current repo; a branch alone switches branch on it
     if project.repo_full_name or project.repo_branch:
@@ -79,10 +95,92 @@ def update_project(project_id: int, project: ProjectCreate, db: Session = Depend
         for field, value in fetch_repo_config(token, full_name, project.repo_branch).items():
             setattr(db_project, field, value)
 
+        # A hook belongs to one repo, so moving to another repo needs a new one.
+        if db_project.repo_id != old_repo_id:
+            db_project.webhook_id = None
+            db_project.webhook_secret = None
+
     db.commit()
     db.refresh(db_project)
 
+    if token and db_project.repo_id != old_repo_id:
+        delete_webhook(old_repo_name, old_webhook_id, token)
+        create_webhook(db, db_project, token)
+
     return db_project
+
+
+@router.post("/{project_id}/webhook", response_model=ProjectResponse, dependencies=[Depends(limit_by_user("webhook-setup", 10))])
+def enable_webhook(project_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Create the push webhook for a project that doesn't have one yet."""
+    project = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if not project.repo_full_name:
+        raise HTTPException(status_code=400, detail="This project has no linked Github repository.")
+
+    if project.webhook_id:
+        return project
+
+    if not create_webhook(db, project, get_github_token(db, user)):
+        raise HTTPException(
+            status_code=502,
+            detail="Could not create the webhook. You need admin access to the repository.",
+        )
+
+    db.refresh(project)
+    return project
+
+def _owned_project(db: Session, project_id: int, user: User) -> Project:
+    project = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+def _env_vars_or_error(project: Project) -> dict[str, str]:
+    try:
+        return read_env_vars(project)
+    except DeploymentError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+
+
+@router.get("/{project_id}/env", response_model=EnvVarsResponse)
+def get_env_vars(project_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    project = _owned_project(db, project_id, user)
+    return {"names": sorted(_env_vars_or_error(project))}
+
+
+@router.put("/{project_id}/env", response_model=EnvVarsResponse)
+def update_env_vars(
+    project_id: int,
+    update: EnvVarsUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Set or delete variables. They apply from the next deployment."""
+    project = _owned_project(db, project_id, user)
+    env_vars = _env_vars_or_error(project)
+
+    for name, value in update.variables.items():
+        if value is None:
+            env_vars.pop(name, None)
+            continue
+
+        problem = validate_env_var(name, value)
+        if problem:
+            raise HTTPException(status_code=422, detail=problem)
+        env_vars[name] = value
+
+    if len(env_vars) > MAX_ENV_VARS:
+        raise HTTPException(status_code=422, detail=f"A project can have {MAX_ENV_VARS} variables.")
+
+    save_env_vars(project, env_vars)
+    db.commit()
+    return {"names": sorted(env_vars)}
+
 
 @router.delete("/{project_id}")  
 def delete_project(project_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -117,6 +215,13 @@ def delete_project(project_id: int, db: Session = Depends(get_db), user: User = 
             status_code=503,
             detail="Could not queue the containers' removal. Try again."
         ) from None
+
+    if db_project.webhook_id:
+        try:
+            delete_webhook(db_project.repo_full_name, db_project.webhook_id, get_github_token(db, user))
+        except HTTPException:
+            # GitHub is disconnected. The leftover hook only gets 401s from now on.
+            pass
 
     # Deployments are removed by the database (ON DELETE CASCADE).
     db.delete(db_project)

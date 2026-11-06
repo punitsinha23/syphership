@@ -224,21 +224,21 @@ A PaaS runs strangers' code on your machine. This phase is what makes the projec
 - [ ] Deployed containers run as non-root (open), `--cap-drop=ALL` ✅, `--security-opt=no-new-privileges`, `--pids-limit`, memory/CPU limits (already have limits)
 - [x] Deployed apps run on a separate Docker network: they **cannot** reach PostgreSQL, Redis, the API, or the Docker socket
 - [x] Only the worker has access to the Docker socket; the API never does (document why: socket = root on host)
-- [ ] Limits: max repo size, build timeout (Phase 5), max image size, max running apps per user
+- [x] Limits: max repo size, build timeout (Phase 5), max image size, max running apps per user
 
 ### Must — Secrets and data
 
 - [x] Encrypt OAuth access tokens at rest (Fernet, key derived from `SECRET_KEY`)
 - [ ] Private repos: request repo scope (or GitHub App), clone with the token **without** it appearing in build logs, error messages, or `git remote -v`
 - [x] Scrub secrets from build logs and API errors (test it)
-- [ ] Per-project environment variables, encrypted at rest, injected at `docker run`, shown masked in the UI
+- [x] Per-project environment variables, encrypted at rest, injected at `docker run`, shown masked in the UI
 
 ### Must — API security
 
 - [x] Authorization tests: user A gets 404 on user B's projects, deployments, logs (IDOR)
 - [x] Validate repo names, branch names, and commit SHAs before they reach `git`/`docker` (no shell injection; never `shell=True`)
 - [x] Rate limiting with Redis (fixed window or token bucket) on auth, deploy, and webhook endpoints
-- [ ] Strict CORS origins, security headers, short-lived access tokens, refresh token rotation reviewed
+- [x] Strict CORS origins, security headers, short-lived access tokens, refresh token rotation reviewed
 
 ### Must — Push-to-deploy (GitHub Webhooks)
 
@@ -246,11 +246,11 @@ A PaaS runs strangers' code on your machine. This phase is what makes the projec
 git push ──► GitHub ──► POST /github/webhook ──► verify HMAC ──► create deployment ──► queue
 ```
 
-- [ ] Webhook endpoint that verifies `X-Hub-Signature-256` (HMAC-SHA256, constant-time compare)
-- [ ] Deduplicate by `X-GitHub-Delivery` (stored in Redis with a TTL) — replay protection
-- [ ] Handle `push` events: match repo + branch to projects, create a deployment for the pushed commit
-- [ ] Register/unregister the webhook when a project is created/deleted (or document manual setup)
-- [ ] "Auto-deploy on push" toggle per project
+- [x] Webhook endpoint that verifies `X-Hub-Signature-256` (HMAC-SHA256, constant-time compare)
+- [x] Deduplicate by `X-GitHub-Delivery` (stored in Redis with a TTL) — replay protection
+- [x] Handle `push` events: match repo + branch to projects, create a deployment for the pushed commit
+- [x] Register/unregister the webhook when a project is created/deleted (or document manual setup)
+- [x] "Auto-deploy on push" toggle per project
 
 ### Stretch
 
@@ -477,9 +477,9 @@ Only list what is actually implemented and understood.
 
 **Phase:** 6 — Security Hardening + Push-to-Deploy
 **Done:** Phases 0–5 (Phase 5 finished 2026-11-03)
-**Next:** Phase 6
+**Next:** Finish Phase 6 checks (real webhook test, private repo deploy), then Phase 7
 **Launch target:** 2026-10-31 (passed; new date to be set)
 
 ---
 
-**Last updated:** 2026-11-03
+**Last updated:** 2026-11-05

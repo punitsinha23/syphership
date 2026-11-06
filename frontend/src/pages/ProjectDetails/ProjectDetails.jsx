@@ -9,6 +9,7 @@ import { usePolling } from "../../hooks/usePolling"
 import { DeploymentCard } from "../../components/DeploymentCard/DeploymentCard"
 import { StatusBadge } from "../../components/StatusBadge/StatusBadge"
 import { Navbar } from "../../components/Navbar/Navbar"
+import { ProjectSettings } from "../../components/ProjectSettings/ProjectSettings"
 import "./ProjectDetails.css"
 
 
@@ -273,6 +274,8 @@ function ProjectDetails() {
                                     )}
                                 </div>
                             </section>
+
+                            <ProjectSettings project={projectDetails} onProjectChange={setProjectDetails} />
 
                             <section className="section">
                                 <div className="section-header">

@@ -1,10 +1,12 @@
+import os
+
 import redis
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from models.deployment import Deployment, DeploymentStatus
 from models.project import Project
-from services.errors import DeploymentInProgress, QueueUnavailable
+from services.errors import AppLimitReached, DeploymentInProgress, QueueUnavailable
 from services.queue import publish
 
 ALLOWED_TRANSITIONS = {
@@ -34,6 +36,10 @@ IN_PROGRESS_STATUSES = (
 )
 
 
+# How many different projects one user can have live or building at once.
+MAX_APPS_PER_USER = int(os.getenv("MAX_APPS_PER_USER", "3"))
+
+
 def update_deployment_status(deployment, new_status: DeploymentStatus, failure_reason: str | None = None):
     if new_status not in ALLOWED_TRANSITIONS[deployment.status]:
         raise ValueError('Invalid deployment status transition')
@@ -53,10 +59,31 @@ def save_container_id(deployment, container_id:str) -> None:
     deployment.container_id = container_id.strip()
 
 
+def _other_active_apps(db: Session, project: Project) -> int:
+    """The owner's other projects that are live or building.
+
+    This project isn't counted: a new deployment replaces its old one."""
+
+    return (
+        db.query(Deployment.project_id)
+        .join(Project)
+        .filter(
+            Project.user_id == project.user_id,
+            Deployment.project_id != project.id,
+            Deployment.status.in_((*IN_PROGRESS_STATUSES, DeploymentStatus.RUNNING)),
+        )
+        .distinct()
+        .count()
+    )
+
+
 def queue_deployment(db: Session, project: Project, commit_sha: str) -> Deployment:
     """Create a QUEUED deployment and publish it to the build queue.
 
-    Raises DeploymentInProgress or QueueUnavailable."""
+    Raises AppLimitReached, DeploymentInProgress or QueueUnavailable."""
+
+    if _other_active_apps(db, project) >= MAX_APPS_PER_USER:
+        raise AppLimitReached(f"You can have {MAX_APPS_PER_USER} apps running. Delete one to deploy another.")
 
     deployment = Deployment(
         project_id=project.id,

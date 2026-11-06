@@ -12,7 +12,7 @@ from schemas.deployment import (
 )
 from auth.dependencies import get_current_user
 from services.deployment_services import IN_PROGRESS_STATUSES, queue_deployment
-from services.errors import DeploymentInProgress, QueueUnavailable
+from services.errors import AppLimitReached, DeploymentInProgress, QueueUnavailable
 from services.queue import publish_cleanup
 from services.rate_limit import limit_by_user
 from github.service import get_github_token, fetch_latest_commit
@@ -58,6 +58,8 @@ def create_deployment(
 
     try:
         return queue_deployment(db, project, commit_sha)
+    except AppLimitReached as e:
+        raise HTTPException(status_code=403, detail=str(e)) from None
     except DeploymentInProgress as e:
         raise HTTPException(status_code=409, detail=str(e)) from None
     except QueueUnavailable as e:

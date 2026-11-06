@@ -7,6 +7,19 @@ class ProjectCreate(BaseModel):
     description: str = ""
     repo_full_name: str | None = None
     repo_branch: str | None = None
+    auto_deploy: bool | None = None
+
+
+class EnvVarsUpdate(BaseModel):
+    """Variables to set; a null value deletes that variable."""
+
+    variables: dict[str, str | None]
+
+
+class EnvVarsResponse(BaseModel):
+    """Names only: saved values never leave the server."""
+
+    names: list[str]
 
 
 class ProjectResponse(BaseModel):
@@ -21,3 +34,5 @@ class ProjectResponse(BaseModel):
     repo_branch: str | None = None
     repo_html_url: str | None = None
     repo_private: bool | None = None
+    auto_deploy: bool
+    webhook_active: bool

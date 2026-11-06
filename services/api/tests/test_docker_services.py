@@ -12,6 +12,7 @@ from services.docker_services import (
     remove_deployment_resources,
     run_docker_container,
 )
+import services.docker_services as docker_services
 from services.errors import BuildError, DeploymentError
 from unittest.mock import MagicMock, patch
 
@@ -564,3 +565,29 @@ def test_remove_deployment_resources_timeout(mock_run, mock_which):
 def test_remove_deployment_resources_invalid_id():
     with pytest.raises(ValueError, match="Invalid deployment ID"):
         remove_deployment_resources(0)
+
+
+@patch("services.docker_services.subprocess.run")
+def test_check_image_size_allows_small_image(mock_run):
+    mock_run.return_value = MagicMock(stdout="1024\n")
+
+    docker_services.check_image_size("app:latest")
+
+
+@patch("services.docker_services.subprocess.run")
+def test_check_image_size_rejects_big_image(mock_run):
+    mock_run.return_value = MagicMock(stdout=f"{docker_services.MAX_IMAGE_BYTES + 1}\n")
+
+    with pytest.raises(DeploymentError, match="larger than"):
+        docker_services.check_image_size("app:latest")
+
+
+@patch("services.docker_services.shutil.which", return_value="/usr/bin/docker")
+@patch("services.docker_services.subprocess.run")
+def test_run_container_passes_env_vars_as_single_arguments(mock_run, mock_which):
+    mock_run.return_value = MagicMock(stdout="abc\n")
+
+    docker_services.run_docker_container("app:latest", 1, 80, env_vars={"NOTE": "a b; rm -rf /"})
+
+    command = mock_run.call_args.args[0]
+    assert command[command.index("--env") + 1] == "NOTE=a b; rm -rf /"

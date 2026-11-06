@@ -14,5 +14,9 @@ class DeploymentInProgress(DeploymentError):
     """The project already has a queued or running build."""
 
 
+class AppLimitReached(DeploymentError):
+    """The user already has as many running apps as the plan allows."""
+
+
 class QueueUnavailable(DeploymentError):
     """Redis could not be reached, so the deployment was marked FAILED."""

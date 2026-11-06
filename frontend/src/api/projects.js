@@ -24,6 +24,39 @@ export function createProject(name, description, repoFullName = null, repoBranch
     })
 }
 
+export function updateProject(project, changes) {
+    return apiFetch(`/projects/${project.id}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            name: project.name,
+            description: project.description,
+            ...changes
+        })
+    })
+}
+
+export function enableWebhook(project_id) {
+    return apiFetch(`/projects/${project_id}/webhook`, { method: "POST" })
+}
+
+export function getEnvVars(project_id) {
+    return apiFetch(`/projects/${project_id}/env`)
+}
+
+// A null value deletes that variable
+export function updateEnvVars(project_id, variables) {
+    return apiFetch(`/projects/${project_id}/env`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ variables })
+    })
+}
+
 // The API deploys the latest commit of the project's branch
 export function createDeployment(project_id) {
     return apiFetch("/deployments/", {

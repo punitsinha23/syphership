@@ -13,6 +13,9 @@ CONTAINER_CPUS = os.getenv("DEPLOYMENT_CPUS", "0.5")
 CONTAINER_MEMORY = os.getenv("DEPLOYMENT_MEMORY", "256m")
 CONTAINER_PIDS_LIMIT = os.getenv("DEPLOYMENT_PIDS_LIMIT", "256")
 
+# Bigger images are refused after the build, so one app can't fill the disk.
+MAX_IMAGE_BYTES = int(os.getenv("DEPLOYMENT_MAX_IMAGE_MB", "2048")) * 1024 * 1024
+
 # User apps get their own network, away from the default one.
 DEPLOYMENT_NETWORK = os.getenv("DEPLOYMENT_NETWORK", "syphership-apps")
 
@@ -127,7 +130,32 @@ def build_docker_image(
 
 
 
-def run_docker_container(image_tag: str, deployment_id: int, container_port: int) -> str:
+def check_image_size(image_tag: str) -> None:
+    """Raise DeploymentError if the built image is over the size limit."""
+    try:
+        result = subprocess.run(
+            ["docker", "image", "inspect", "--format", "{{.Size}}", image_tag],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Docker image inspection timed out.") from None
+    except subprocess.CalledProcessError:
+        raise RuntimeError("Docker image was not found") from None
+
+    if int(result.stdout.strip()) > MAX_IMAGE_BYTES:
+        limit_mb = MAX_IMAGE_BYTES // (1024 * 1024)
+        raise DeploymentError(f"The image is larger than the {limit_mb} MB limit.")
+
+
+def run_docker_container(
+        image_tag: str,
+        deployment_id: int,
+        container_port: int,
+        env_vars: dict[str, str] | None = None,
+) -> str:
     if not isinstance(deployment_id, int) or deployment_id <= 0:
         raise ValueError("Invalid deployment ID")
 
@@ -141,6 +169,10 @@ def run_docker_container(image_tag: str, deployment_id: int, container_port: int
         raise RuntimeError("Docker is not installed or is not available in PATH.")
 
     container_name = deployment_resource_name(deployment_id)
+
+    env_args = []
+    for name, value in (env_vars or {}).items():
+        env_args += ["--env", f"{name}={value}"]
 
     try:
         result = subprocess.run(
@@ -167,6 +199,7 @@ def run_docker_container(image_tag: str, deployment_id: int, container_port: int
                 CONTAINER_PIDS_LIMIT,
                 "--network",
                 DEPLOYMENT_NETWORK,
+                *env_args,
                 # Publish on localhost only; the empty host port lets Docker pick a free one.
                 "-p",
                 f"127.0.0.1::{container_port}",

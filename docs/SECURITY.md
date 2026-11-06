@@ -16,6 +16,7 @@ Status: ✅ done · 🟡 partial · ❌ open
 | **OAuth tokens** | A GitHub token with `repo` scope can read and push to the user's repositories. |
 | **The host / Docker socket** | Anyone who can talk to the Docker socket can run `docker run -v /:/host ...` and become root on the host. |
 | **Redis** | The deployment queue. Whoever can write to it can delete queued jobs or publish fake ones (redeploying other users' apps). |
+| **Project secrets** | Webhook secrets and app environment variables, encrypted in PostgreSQL. |
 | **Other users' apps** | One user's app must not read, disrupt or starve another's. |
 | **`SECRET_KEY`** | Signs session JWTs and derives the token encryption key. Leaking it breaks both. |
 
@@ -38,7 +39,7 @@ Status: ✅ done · 🟡 partial · ❌ open
 | 5 | Repo, branch or SHA used to inject shell commands or git options | 1 | All `subprocess` calls use argument lists, never `shell=True`; clone only accepts HTTPS `github.com` URLs ending in `.git`; SHAs must be 40 lowercase hex characters; repo names must be `owner/name`; branch names can't start with `-` or hold characters git refuses | ✅ |
 | 6 | GitHub token leaks via `git remote -v`, clone errors or build logs | 1/2 | Token passed to git as an HTTP header through environment variables, never in the URL; clone errors shown to users are generic; build logs and failure reasons go through `scrub()` before saving, with tests that try to leak a token | ✅ |
 | 7 | Database dump exposes OAuth tokens | 3 | Tokens encrypted at rest with Fernet (key derived from `SECRET_KEY`) | ✅ |
-| 8 | Forged request pretending to be a GitHub push | 3 | — (webhook not built yet) | ❌ |
+| 8 | Forged request pretending to be a GitHub push | 3 | Each project has its own random secret, stored encrypted; `X-Hub-Signature-256` checked with HMAC-SHA256 and `hmac.compare_digest`; repeated `X-GitHub-Delivery` IDs ignored for 24 hours | ✅ |
 | 9 | Brute force or spam on login, deploy, webhook | 3 | Fixed-window counters in Redis: deploy 5/min per user; login exchange 10/min, token refresh 30/min and webhook 60/min per IP. Over the limit returns 429; if Redis is down, these routes return 503 | ✅ |
 | 10 | A broken or hostile queue message crashes the workers in a loop | 1/3 | Malformed messages and messages delivered `MAX_DELIVERIES` times go to the dead-letter stream | ✅ |
 | 11 | Docker socket access from the API | 3 | Only workers use Docker. The API queues cleanup jobs when a deployment or project is deleted, and a test checks it never loads the Docker code | ✅ |
@@ -66,9 +67,10 @@ chown 1:1 /www/index.html  → Operation not permitted
 
 ## Open work
 
-- **#2 Non-root:** decide whether to enforce `--user` (breaks images that bind port 80 or write to `/root`). Consider a read-only root filesystem.
+- **#2 Non-root (decided: not enforced at launch):** `--user` breaks images that bind port 80 or write to `/root`, so apps may run as root inside the container, with all capabilities dropped. This is an accepted risk until it is tested on real images. Dropped capabilities may also stop some images (such as nginx) from starting; to be checked in Phase 7. Because Docker alone is not strong isolation for untrusted code, launch is invite-only.
+- **Tokens:** access tokens last 1 hour and refresh tokens 7 days. Refresh token rotation is not built yet (Phase 7).
+- **Env vars:** values are encrypted at rest and never returned by the API, but they are visible to the host through `docker inspect` and in the worker's `docker run` arguments.
 - **#6 Server logs:** tracebacks from unexpected errors (`logger.exception`) are not scrubbed. Users never see them, but anyone reading the worker logs could.
 - **#7 Key separation:** use a dedicated encryption key instead of deriving it from `SECRET_KEY`, so rotating one doesn't break the other.
-- **#8 Webhook:** verify `X-Hub-Signature-256` (HMAC-SHA256, `hmac.compare_digest`); reject repeated `X-GitHub-Delivery` IDs (stored in Redis with a TTL).
 - **#9 Client IP behind a proxy:** once Caddy is in front (Phase 7), `request.client.host` will be Caddy's IP, so read the real one from a trusted header.
 - **Redis password:** add `--requirepass` as a second layer behind #1.

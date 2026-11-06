@@ -106,20 +106,42 @@ def get_github_token(db, user) -> str:
     return token
 
 
-def github_get(path: str, token: str, params: dict | None = None):
-    response = httpx.get(
-        f"https://api.github.com{path}",
-        params=params,
-        headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
-        timeout=10,
-    )
+def _github_headers(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+
+
+def _check_github_response(response: httpx.Response) -> None:
     if response.status_code == 401:
         raise HTTPException(status_code=403, detail="Github access was revoked. Reconnect Github.")
     if response.status_code == 404:
         raise HTTPException(status_code=404, detail="Respository or branch not found, or no access.")
     response.raise_for_status()
+
+
+def github_get(path: str, token: str, params: dict | None = None):
+    response = httpx.get(
+        f"https://api.github.com{path}",
+        params=params,
+        headers=_github_headers(token),
+        timeout=10,
+    )
+    _check_github_response(response)
     return response.json()
 
+
+def github_post(path: str, token: str, body: dict):
+    response = httpx.post(f"https://api.github.com{path}", json=body, headers=_github_headers(token), timeout=10)
+    _check_github_response(response)
+    return response.json()
+
+
+def github_delete(path: str, token: str) -> None:
+    response = httpx.delete(f"https://api.github.com{path}", headers=_github_headers(token), timeout=10)
+    _check_github_response(response)
+
+
+# GitHub reports repo size in KB.
+MAX_REPO_SIZE_KB = int(os.getenv("DEPLOYMENT_MAX_REPO_MB", "500")) * 1024
 
 REPO_FULL_NAME = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
@@ -129,6 +151,9 @@ def fetch_repo_config(token: str, full_name: str, branch: str | None = None) -> 
         raise HTTPException(status_code=422, detail="Repository must look like 'owner/name'.")
 
     repo = github_get(f"/repos/{full_name}", token)
+    if repo.get("size", 0) > MAX_REPO_SIZE_KB:
+        raise HTTPException(status_code=422, detail="This repository is too large to deploy.")
+
     branch = branch or repo["default_branch"]
     if not is_valid_branch(branch):
         raise HTTPException(status_code=422, detail="Invalid branch name.")

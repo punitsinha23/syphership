@@ -55,7 +55,7 @@ def test_login_exchange_returns_429_over_the_limit(client):
 
 
 def test_webhook_is_limited_before_the_signature_check(client):
-    responses = [client.post("/github/webhook", content=b"{}").status_code for _ in range(61)]
+    responses = [client.post("/github/webhook/1", content=b"{}").status_code for _ in range(61)]
 
     assert responses[:60] == [401] * 60
     assert responses[60] == 429

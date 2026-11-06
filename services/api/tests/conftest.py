@@ -11,6 +11,7 @@ from models.project import Project
 from models.deployment import Deployment
 from auth.security import create_session_tokens
 from main import app
+import github.webhook
 from services.queue import redis_client
 
 
@@ -38,6 +39,12 @@ def setup_db():
     Base.metadata.create_all(bind=test_engine)
     yield
     Base.metadata.drop_all(bind=test_engine)
+
+
+@pytest.fixture(autouse=True)
+def no_real_webhooks(monkeypatch):
+    """Without a public URL, no test creates a webhook on real GitHub."""
+    monkeypatch.setattr(github.webhook, "PUBLIC_API_URL", "")
 
 
 @pytest.fixture(autouse=True)

@@ -80,3 +80,16 @@ def test_repo_config_rejects_bad_branch(monkeypatch):
 )
 def test_scrub(args, expected):
     assert scrub(*args) == expected
+
+
+def test_repo_config_rejects_huge_repo(monkeypatch):
+    monkeypatch.setattr(
+        github.service,
+        "github_get",
+        lambda path, token, params=None: {"size": github.service.MAX_REPO_SIZE_KB + 1, "default_branch": "main"},
+    )
+
+    with pytest.raises(HTTPException) as error:
+        github.service.fetch_repo_config("token", "octo/app", "main")
+
+    assert error.value.status_code == 422

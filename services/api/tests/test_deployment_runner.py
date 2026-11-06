@@ -4,6 +4,7 @@ from fastapi import HTTPException
 import services.deployment_runner as runner
 from models.deployment import Deployment, DeploymentStatus
 from models.project import Project
+from services.env_vars import save_env_vars
 from services.errors import BuildError, DeploymentError
 from tests.conftest import TestingSessionLocal
 
@@ -71,6 +72,7 @@ def pipeline(monkeypatch, tmp_path):
         "build_docker_image",
         record("build", ("syphership-deployment-1:latest", "#1 DONE\n")),
     )
+    monkeypatch.setattr(runner, "check_image_size", record("image_size"))
     monkeypatch.setattr(runner, "get_exposed_port", record("exposed_port", 80))
     monkeypatch.setattr(runner, "run_docker_container", record("run", "abc123container"))
     monkeypatch.setattr(runner, "get_container_status", record("status", "running"))
@@ -107,6 +109,7 @@ def test_successful_deployment_is_running_with_url(make_user, pipeline):
         "token",
         "clone",
         "build",
+        "image_size",
         "exposed_port",
         "run",
         "status",
@@ -488,3 +491,62 @@ def test_token_in_successful_build_logs_is_not_saved(make_user, pipeline, monkey
     deployment = get_deployment(deployment_id)
     assert deployment.status == DeploymentStatus.RUNNING
     assert deployment.build_logs == "#1 token=***\n"
+
+
+def set_project_env(deployment_id, env_vars):
+    db = TestingSessionLocal()
+    try:
+        deployment = db.query(Deployment).filter(Deployment.id == deployment_id).one()
+        project = db.query(Project).filter(Project.id == deployment.project_id).one()
+        save_env_vars(project, env_vars)
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_env_vars_are_passed_to_the_container(make_user, pipeline, monkeypatch):
+    deployment_id = create_queued_deployment(make_user)
+    set_project_env(deployment_id, {"API_KEY": "abc"})
+    received = {}
+
+    def fake_run(image_tag, deployment_id, container_port, env_vars=None):
+        received.update(env_vars)
+        return "abc123container"
+
+    monkeypatch.setattr(runner, "run_docker_container", fake_run)
+
+    runner.run_deployment(deployment_id)
+
+    assert received == {"API_KEY": "abc"}
+    assert get_deployment(deployment_id).status == DeploymentStatus.RUNNING
+
+
+def test_unreadable_env_vars_fail_the_deployment(make_user, pipeline):
+    deployment_id = create_queued_deployment(make_user)
+    db = TestingSessionLocal()
+    try:
+        deployment = db.query(Deployment).filter(Deployment.id == deployment_id).one()
+        db.query(Project).filter(Project.id == deployment.project_id).update({"env_vars": "not-encrypted"})
+        db.commit()
+    finally:
+        db.close()
+
+    runner.run_deployment(deployment_id)
+
+    deployment = get_deployment(deployment_id)
+    assert deployment.status == DeploymentStatus.FAILED
+    assert "could not be read" in deployment.failure_reason
+    assert "run" not in pipeline["calls"]
+
+
+def test_oversized_image_fails_before_it_runs(make_user, pipeline, monkeypatch):
+    deployment_id = create_queued_deployment(make_user)
+    monkeypatch.setattr(runner, "check_image_size", fail_with(DeploymentError("The image is larger than the 2048 MB limit.")))
+
+    runner.run_deployment(deployment_id)
+
+    deployment = get_deployment(deployment_id)
+    assert deployment.status == DeploymentStatus.FAILED
+    assert "larger than" in deployment.failure_reason
+    assert "run" not in pipeline["calls"]
+    assert deployment_id in pipeline["removed"]

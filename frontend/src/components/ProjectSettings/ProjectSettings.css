@@ -1,0 +1,70 @@
+.project-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 20px;
+}
+
+.project-settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.project-settings-title {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.project-settings-help {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.7;
+}
+
+.project-settings-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.project-settings-vars {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.project-settings-var {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.project-settings-var code {
+    overflow-wrap: anywhere;
+}
+
+.project-settings-mask {
+    flex: 1;
+    opacity: 0.5;
+}
+
+.project-settings-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+@media (max-width: 600px) {
+    .project-settings-form {
+        grid-template-columns: 1fr;
+    }
+}
