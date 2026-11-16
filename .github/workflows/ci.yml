@@ -86,3 +86,48 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  deploy:
+    needs: [backend, frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: production
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build the frontend for production
+        working-directory: frontend
+        env:
+          VITE_API_URL: https://api.syphership.duckdns.org
+        run: |
+          npm ci
+          npm run build
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Deploy the backend
+        run: ssh -i ~/.ssh/deploy_key root@${{ secrets.SSH_HOST }} "cd /opt/syphership && git fetch --quiet origin main && git reset --hard ${{ github.sha }} && bash scripts/deploy.sh ${{ github.sha }}"
+
+
+      - name: Upload the frontend
+        run: rsync -az --delete -e "ssh -i ~/.ssh/deploy_key" frontend/dist/ root@${{ secrets.SSH_HOST }}:/var/www/syphership/
+
+      - name: Check the live site
+        run: |
+          curl -fsS https://api.syphership.duckdns.org/ready
+          curl -fsS -o /dev/null https://syphership.duckdns.org/
+
