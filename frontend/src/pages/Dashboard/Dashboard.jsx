@@ -39,7 +39,7 @@ function Dashboard() {
 
     const stats = [
         { label: "Projects", value: projects.length },
-        { label: "Deployments", value: deployments.length },
+        { label: "Deployments", short: "Deploys", value: deployments.length },
         { label: "Running", value: latestStatuses.filter((s) => s === "RUNNING").length, tone: "running" },
         { label: "Asleep", value: latestStatuses.filter((s) => s === "SLEEPING" || s === "WAKING").length },
         { label: "Failing", value: latestStatuses.filter((s) => s === "FAILED").length, tone: "failed" },
@@ -76,7 +76,15 @@ function Dashboard() {
                         <section className="section stat-grid" aria-label="Summary">
                             {stats.map((stat) => (
                                 <div className="stat" key={stat.label}>
-                                    <p className="stat-label">{stat.label}</p>
+                                    <p className="stat-label">
+                                        {stat.short ? (
+                                            <>
+                                                <span className="stat-label-long">{stat.label}</span>
+                                                {/* Shown instead on small phones, where the long label won't fit */}
+                                                <span className="stat-label-short" aria-hidden="true">{stat.short}</span>
+                                            </>
+                                        ) : stat.label}
+                                    </p>
                                     <p className={`stat-value ${stat.value && stat.tone ? `stat-value-${stat.tone}` : ""}`}>
                                         {stat.value}
                                     </p>

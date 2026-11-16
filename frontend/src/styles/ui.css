@@ -272,9 +272,14 @@
   background: var(--color-surface);
 }
 
+/* All stats on one line, however many there are. Sized by the strip's own
+   width (container queries below), not the screen's, because the sidebar
+   takes part of the screen on tablets. */
 .stat-grid {
+  container-type: inline-size;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -291,12 +296,15 @@
 }
 
 .stat-label {
+  overflow: hidden;
   margin-bottom: 10px;
   color: var(--color-text-muted);
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .stat-value {
@@ -307,8 +315,62 @@
   font-variant-numeric: tabular-nums;
 }
 
+.stat-label-short {
+  display: none;
+}
+
 .stat-value-running { color: var(--color-status-running); }
 .stat-value-failed { color: var(--color-status-failed); }
+
+@container (max-width: 760px) {
+  .stat {
+    padding: 14px;
+  }
+
+  .stat-label {
+    margin-bottom: 6px;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+
+  .stat-value {
+    font-size: 22px;
+  }
+}
+
+/* Narrow strip: compact centered cells, still all on one line */
+@container (max-width: 560px) {
+  .stat {
+    padding: 10px 4px;
+    text-align: center;
+  }
+
+  .stat-label {
+    margin-bottom: 4px;
+    font-size: 9px;
+    letter-spacing: 0;
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+}
+
+/* Too narrow for long labels: show the short one ("Deploys") instead */
+@container (max-width: 470px) {
+  /* Hidden visually but still read by screen readers */
+  .stat-label-long {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .stat-label-short {
+    display: inline;
+  }
+}
 
 /* ================================
    Forms
@@ -438,20 +500,6 @@ select.input:disabled {
 /* ================================
    Responsive & motion
    ================================ */
-
-@media (max-width: 900px) {
-  .stat-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .stat:nth-child(3) {
-    border-left: none;
-  }
-
-  .stat:nth-child(n + 3) {
-    border-top: 1px solid var(--color-border);
-  }
-}
 
 @media (max-width: 700px) {
   .app-page {
