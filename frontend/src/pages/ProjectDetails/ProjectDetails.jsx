@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { getProjectDetails, createDeployment, deleteProject, getDeployments } from "../../api/projects"
 import { getUser } from "../../api/user"
@@ -12,9 +12,18 @@ import { Navbar } from "../../components/Navbar/Navbar"
 import { ProjectSettings } from "../../components/ProjectSettings/ProjectSettings"
 import "./ProjectDetails.css"
 
+const DEPLOYMENTS_ERROR = "Failed to load deployment history"
 
 
-function ProjectDetails() {
+
+// Keyed by project ID: opening another project mounts a fresh ProjectDetails,
+// so its state starts empty instead of being reset inside an effect.
+function ProjectDetailsPage() {
+    const { project_id } = useParams()
+    return <ProjectDetails key={project_id} project_id={project_id} />
+}
+
+function ProjectDetails({ project_id }) {
     const [projectDetails, setProjectDetails] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -27,7 +36,6 @@ function ProjectDetails() {
 
     const [deletingProject, setDeletingProject] = useState(false)
 
-    const { project_id } = useParams()
     const navigate = useNavigate()
     // Set when the first deployment of a new project couldn't start
     const { state: locationState } = useLocation()
@@ -84,61 +92,38 @@ function ProjectDetails() {
         getUser().then((user) => setGithubConnected(Boolean(user?.github_connected)))
     }, [])
 
-    async function loadProjectDetails(project_id, isActive = () => true) {
+    // Used after deploying and while polling; the first load is in the effect below.
+    async function loadDeployments() {
         try {
-            const data = await getProjectDetails(project_id)
-
-            if(isActive()){
-                setProjectDetails(data)
-            }
+            setDeploymentHistory(await getDeployments(project_id))
         } catch (error) {
-            if(isActive()){
-                setError(
-                    error.status === 404 ? "Project not found" : error.message || "Failed to load project"
-                )
-            }
-        } finally {
-            if(isActive()){
-                setLoading(false)
-            }
+            setError(error.message || DEPLOYMENTS_ERROR)
         }
     }
 
-    async function loadDeployments(isActive = () => true) {
-    try {
-        const data = await getDeployments(project_id)
-
-        if (isActive()) {
-            setDeploymentHistory(data)
-        }
-    } catch (error) {
-        if (isActive()) {
-            setError(error.message || "Failed to load deployment history")
-        }
-    } finally {
-        if (isActive()) {
-            setHistoryLoading(false)
-        }
-    }
-}
-
-    useEffect(()=>{
+    // Initial state is already "loading" (see ProjectDetailsPage), so this only
+    // fetches. State is set in the promise callbacks, never during the effect itself.
+    useEffect(() => {
         let cancelled = false
-        const isActive = () => !cancelled
 
-        setLoading(true)
-        setHistoryLoading(true)
-        setError(null)
-        setProjectDetails(null)
-        setDeploymentHistory([])
+        getProjectDetails(project_id)
+            .then((data) => { if (!cancelled) setProjectDetails(data) })
+            .catch((error) => {
+                if (!cancelled) {
+                    setError(error.status === 404 ? "Project not found" : error.message || "Failed to load project")
+                }
+            })
+            .finally(() => { if (!cancelled) setLoading(false) })
 
-        loadProjectDetails(project_id, isActive)
-        loadDeployments(isActive)
+        getDeployments(project_id)
+            .then((data) => { if (!cancelled) setDeploymentHistory(data) })
+            .catch((error) => { if (!cancelled) setError(error.message || DEPLOYMENTS_ERROR) })
+            .finally(() => { if (!cancelled) setHistoryLoading(false) })
 
         return () => {
             cancelled = true
         }
-    },[project_id])
+    }, [project_id])
 
     const hasActiveDeployment = deploymentHistory.some((item) => isInProgress(item.status))
 
@@ -315,4 +300,4 @@ function ProjectDetails() {
         )
 }
 
-export default ProjectDetails
+export default ProjectDetailsPage

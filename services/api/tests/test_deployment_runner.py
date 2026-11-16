@@ -8,7 +8,6 @@ from services.env_vars import save_env_vars
 from services.errors import BuildError, DeploymentError
 from tests.conftest import TestingSessionLocal
 
-
 FAKE_SHA = "a" * 40
 
 
@@ -573,7 +572,8 @@ def test_unreadable_env_vars_fail_the_deployment(make_user, pipeline):
 
 def test_oversized_image_fails_before_it_runs(make_user, pipeline, monkeypatch):
     deployment_id = create_queued_deployment(make_user)
-    monkeypatch.setattr(runner, "check_image_size", fail_with(DeploymentError("The image is larger than the 2048 MB limit.")))
+    too_big = DeploymentError("The image is larger than the 2048 MB limit.")
+    monkeypatch.setattr(runner, "check_image_size", fail_with(too_big))
 
     runner.run_deployment(deployment_id)
 
@@ -654,7 +654,8 @@ def test_healthy_app_is_left_alone(make_user, pipeline):
 
 def test_docker_outage_does_not_fail_every_app(make_user, pipeline, monkeypatch):
     deployment_id = running_deployment(make_user)
-    monkeypatch.setattr(runner, "get_container_status", fail_with(RuntimeError("Docker could not inspect the container.")))
+    docker_down = RuntimeError("Docker could not inspect the container.")
+    monkeypatch.setattr(runner, "get_container_status", fail_with(docker_down))
 
     with pytest.raises(RuntimeError):
         runner.fail_dead_deployments()

@@ -3,8 +3,8 @@ import logging
 import os
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Callable
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
@@ -14,9 +14,8 @@ from sqlalchemy import delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from auth.security import create_token, verify_token, encrypt_secret
-from models.user import User, OAuthAccount, LoginCode
-
+from auth.security import create_token, encrypt_secret, verify_token
+from models.user import LoginCode, OAuthAccount, User
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 
@@ -139,7 +138,7 @@ def complete_oauth(
         try:
             identity = fetch_identity(code)
         except httpx.HTTPError:
-            raise OAuthError(f"Could not reach {name}. Please try again.")
+            raise OAuthError(f"Could not reach {name}. Please try again.") from None
 
         link_user_id = payload.get("link_user_id")
         user = sign_in_with_provider(db, provider=provider, link_user_id=link_user_id, **identity)
@@ -240,7 +239,7 @@ def sign_in_with_provider(
     except IntegrityError:
         # Concurrent sign-in created the same user/account first
         db.rollback()
-        raise OAuthError("Sign-in conflicted with another request. Please try again.")
+        raise OAuthError("Sign-in conflicted with another request. Please try again.") from None
 
     db.refresh(user)
     return user
@@ -253,7 +252,7 @@ def _hash_code(code: str) -> str:
 
 
 def issue_login_code(db: Session, user: User) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     code = secrets.token_urlsafe(32)
 
     db.execute(delete(LoginCode).where(LoginCode.expires_at < now))
@@ -272,7 +271,7 @@ def redeem_login_code(db: Session, code: str) -> int | None:
     ).first()
     db.commit()
 
-    if row is None or row.expires_at < datetime.now(timezone.utc):
+    if row is None or row.expires_at < datetime.now(UTC):
         return None
 
     return row.user_id

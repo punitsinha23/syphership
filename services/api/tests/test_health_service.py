@@ -6,7 +6,6 @@ import pytest
 from services.errors import DeploymentError
 from services.health_service import wait_for_healthy
 
-
 URL = "http://localhost:49153"
 
 

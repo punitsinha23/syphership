@@ -4,20 +4,7 @@ import signal
 import socket
 import uuid
 
-from services.queue import (
-    ensure_group,
-    redis_client,
-    ACTION_CLEANUP,
-    ACTION_WAKE,
-    APP_CHECK_KEY,
-    APP_CHECK_SECONDS,
-    GROUP,
-    STREAM,
-    RECLAIM_IDLE_MS,
-    MAX_DELIVERIES,
-    delivery_count,
-    dead_letters,
-)
+from services.app_routes import sync_app_routes
 from services.deployment_runner import (
     fail_dead_deployments,
     fail_dead_lettered,
@@ -25,10 +12,22 @@ from services.deployment_runner import (
     run_deployment,
     wake_deployment,
 )
-from services.app_routes import sync_app_routes
-from services.idle_apps import record_activity, sleep_idle_apps
 from services.docker_services import ensure_network, remove_deployment_resources
-
+from services.idle_apps import record_activity, sleep_idle_apps
+from services.queue import (
+    ACTION_CLEANUP,
+    ACTION_WAKE,
+    APP_CHECK_KEY,
+    APP_CHECK_SECONDS,
+    GROUP,
+    MAX_DELIVERIES,
+    RECLAIM_IDLE_MS,
+    STREAM,
+    dead_letters,
+    delivery_count,
+    ensure_group,
+    redis_client,
+)
 
 logger = logging.getLogger(__name__)
 

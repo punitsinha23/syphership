@@ -11,7 +11,7 @@ Only with APPS_DOMAIN: without Caddy in front, nothing could wake an app."""
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from database import SessionLocal
 from models.deployment import Deployment, DeploymentStatus
@@ -35,7 +35,7 @@ def _last_visit(project_id: int, project_name: str) -> datetime | None:
         mtime = app_routes.app_log_file(project_id, project_name).stat().st_mtime
     except FileNotFoundError:
         return None
-    return datetime.fromtimestamp(mtime, tz=timezone.utc)
+    return datetime.fromtimestamp(mtime, tz=UTC)
 
 
 def record_activity() -> None:
@@ -65,7 +65,7 @@ def sleep_idle_apps(now: datetime | None = None) -> None:
     if not _enabled():
         return
 
-    cutoff = (now or datetime.now(timezone.utc)) - timedelta(hours=IDLE_SLEEP_HOURS)
+    cutoff = (now or datetime.now(UTC)) - timedelta(hours=IDLE_SLEEP_HOURS)
 
     db = SessionLocal()
     try:

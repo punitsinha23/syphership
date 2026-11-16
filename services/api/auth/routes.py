@@ -1,16 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from database import get_db
-from models.user import User, OAuthAccount
-from schemas.user import CodeExchange, DeleteAccount, RefreshToken
-from auth.security import verify_token
-from auth.sessions import end_session, issue_session, rotate_session
 from auth.dependencies import get_current_user, get_user_by_sub
 from auth.oauth import redeem_login_code
+from auth.security import verify_token
+from auth.sessions import end_session, issue_session, rotate_session
+from database import get_db
+from models.user import OAuthAccount, User
+from schemas.user import CodeExchange, DeleteAccount, RefreshToken
 from services.account import delete_account
 from services.rate_limit import limit_by_ip, limit_by_user
-
 
 router = APIRouter(prefix="/auth")
 

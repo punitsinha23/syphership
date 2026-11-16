@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from database import get_db
 from auth.oauth import complete_oauth, redirect_to_provider
-from google_oauth.service import get_google_auth_url, fetch_google_identity
-
+from database import get_db
+from google_oauth.service import fetch_google_identity, get_google_auth_url
 
 router = APIRouter(prefix="/google", tags=["Google"])
 

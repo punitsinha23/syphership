@@ -5,7 +5,6 @@ import httpx
 
 from auth.oauth import OAuthError
 
-
 SCOPES = "openid email profile"
 
 

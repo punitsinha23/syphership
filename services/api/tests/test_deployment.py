@@ -13,7 +13,6 @@ from models.user import OAuthAccount, User
 from services.deployment_services import update_deployment_status
 from tests.conftest import TestingSessionLocal
 
-
 FAKE_SHA = "a" * 40
 
 
@@ -131,7 +130,12 @@ def test_deployment_requires_github_connected(client, auth_headers):
 def test_deployment_status_flow():
     deployment = Deployment(status=DeploymentStatus.QUEUED)
 
-    for status in [DeploymentStatus.BUILDING, DeploymentStatus.DEPLOYING, DeploymentStatus.RUNNING, DeploymentStatus.STOPPED]:
+    for status in [
+        DeploymentStatus.BUILDING,
+        DeploymentStatus.DEPLOYING,
+        DeploymentStatus.RUNNING,
+        DeploymentStatus.STOPPED,
+    ]:
         update_deployment_status(deployment, status)
         assert deployment.status == status
 
@@ -309,15 +313,6 @@ def fake_remove_resources(monkeypatch):
     monkeypatch.setattr(routes.deployments, "publish_cleanup", removed.append)
     return removed
 
-
-def set_status(deployment_id, status):
-    db = TestingSessionLocal()
-    try:
-        deployment = db.query(Deployment).filter(Deployment.id == deployment_id).first()
-        deployment.status = status
-        db.commit()
-    finally:
-        db.close()
 
 
 def test_delete_finished_deployment(client, auth_headers, project_id, fake_remove_resources):

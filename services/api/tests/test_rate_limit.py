@@ -1,4 +1,3 @@
-import pytest
 import redis
 
 import services.rate_limit

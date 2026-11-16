@@ -1,10 +1,13 @@
-from pydantic import BaseModel
-from models.deployment import DeploymentStatus
 from datetime import datetime
+
+from pydantic import BaseModel
+
+from models.deployment import DeploymentStatus
+
 
 class DeploymentCreate(BaseModel):
     project_id: int
-    
+
 
 class DeploymentResponse(BaseModel):
     id: int

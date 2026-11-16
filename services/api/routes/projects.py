@@ -1,21 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException
 import httpx
-from sqlalchemy.orm import Session
 import redis
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
 from auth.dependencies import get_current_user
 from database import get_db
-from models.user import User
-from models.deployment import Deployment
-from models.project import Project
-from schemas.project import EnvVarsResponse, EnvVarsUpdate, ProjectCreate, ProjectCreated, ProjectResponse
 from github.service import fetch_latest_commit, fetch_repo_config, get_github_token
 from github.webhook import create_webhook, delete_webhook
+from models.deployment import Deployment
+from models.project import Project
+from models.user import User
+from schemas.project import EnvVarsResponse, EnvVarsUpdate, ProjectCreate, ProjectCreated, ProjectResponse
 from services.deployment_services import IN_PROGRESS_STATUSES, queue_deployment
 from services.env_vars import MAX_ENV_VARS, read_env_vars, save_env_vars, validate_env_var
 from services.errors import DeploymentError
 from services.queue import publish_cleanup
 from services.rate_limit import limit_by_user
-
 
 router = APIRouter(prefix='/projects')
 
@@ -79,7 +79,12 @@ def create_projects(project: ProjectCreate, db: Session = Depends(get_db), user:
 
 @router.get("/", response_model=list[ProjectResponse])
 def get_projects(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    projects = db.query(Project).filter(Project.user_id == user.id).order_by(Project.created_at.desc(), Project.id.desc()).all()
+    projects = (
+        db.query(Project)
+        .filter(Project.user_id == user.id)
+        .order_by(Project.created_at.desc(), Project.id.desc())
+        .all()
+    )
     return projects
 
 
@@ -94,7 +99,12 @@ def get_project_by_id(project_id: int, db: Session = Depends(get_db), user: User
     return project
 
 @router.put("/{project_id}", response_model=ProjectResponse)
-def update_project(project_id: int, project: ProjectCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def update_project(
+    project_id: int,
+    project: ProjectCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
 
     db_project = db.query(Project).filter(
     Project.id == project_id,
@@ -139,7 +149,11 @@ def update_project(project_id: int, project: ProjectCreate, db: Session = Depend
     return db_project
 
 
-@router.post("/{project_id}/webhook", response_model=ProjectResponse, dependencies=[Depends(limit_by_user("webhook-setup", 10))])
+@router.post(
+    "/{project_id}/webhook",
+    response_model=ProjectResponse,
+    dependencies=[Depends(limit_by_user("webhook-setup", 10))],
+)
 def enable_webhook(project_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Create the push webhook for a project that doesn't have one yet."""
     project = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
@@ -211,7 +225,7 @@ def update_env_vars(
     return {"names": sorted(env_vars)}
 
 
-@router.delete("/{project_id}")  
+@router.delete("/{project_id}")
 def delete_project(project_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     db_project = db.query(Project).filter(
         Project.id == project_id,
@@ -258,9 +272,8 @@ def delete_project(project_id: int, db: Session = Depends(get_db), user: User = 
 
     return {"message" : "Project deleted"}
 
-    
 
 
 
-            
-            
+
+

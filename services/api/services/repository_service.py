@@ -1,15 +1,14 @@
 
+import os
 import shutil
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
-import os
 
 from git import GitCommandError, Repo
 
 from services.errors import DeploymentError
 from services.validation import is_valid_sha
-
 
 DEPLOYMENT_ROOT = Path(tempfile.gettempdir()) / "syphership-deployments"
 

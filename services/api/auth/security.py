@@ -1,11 +1,12 @@
-from jose import jwt
-from datetime import datetime, timedelta, timezone
-from dotenv import load_dotenv
-from cryptography.fernet import Fernet, InvalidToken
 import base64
 import hashlib
 import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+from cryptography.fernet import Fernet, InvalidToken
+from dotenv import load_dotenv
+from jose import jwt
 
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
@@ -25,7 +26,7 @@ _fernet = Fernet(base64.urlsafe_b64encode(hashlib.sha256(SECRET_KEY.encode()).di
 def create_token(data: dict, expire_delta: timedelta, token_type: str):
     to_encode = data.copy()
 
-    expire = datetime.now(timezone.utc) + expire_delta
+    expire = datetime.now(UTC) + expire_delta
     to_encode.update({'exp': expire,
                       'type' : token_type
                       })

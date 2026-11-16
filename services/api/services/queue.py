@@ -1,6 +1,7 @@
 import os
-import redis
 from pathlib import Path
+
+import redis
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")

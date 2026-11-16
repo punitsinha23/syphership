@@ -1,22 +1,19 @@
-from fastapi import Depends, FastAPI, Request, Response
 import redis
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-from dotenv import load_dotenv
-from fastapi.middleware.cors import CORSMiddleware
 
-from database import get_db
-from models.user import User
-from models.project import Project
-from models.deployment import Deployment
+from auth.oauth import FRONTEND_URL
 from auth.routes import router as auth_router
-from routes.projects import router as project_router
-from routes.deployments import router as deployment_router
-from routes.wake import router as wake_router
+from database import get_db
 from github.routes import router as github_router
 from google_oauth.routes import router as google_router
-from auth.oauth import FRONTEND_URL
+from routes.deployments import router as deployment_router
+from routes.projects import router as project_router
+from routes.wake import router as wake_router
 from services.queue import redis_client
 
 load_dotenv()

@@ -1,8 +1,10 @@
+import redis
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-import redis
 
+from auth.dependencies import get_current_user
 from database import get_db
+from github.service import fetch_latest_commit, get_github_token
 from models.deployment import Deployment
 from models.project import Project
 from schemas.deployment import (
@@ -10,14 +12,10 @@ from schemas.deployment import (
     DeploymentLogsResponse,
     DeploymentResponse,
 )
-from auth.dependencies import get_current_user
 from services.deployment_services import IN_PROGRESS_STATUSES, queue_deployment
 from services.errors import AppLimitReached, DeploymentInProgress, QueueUnavailable
 from services.queue import publish_cleanup
 from services.rate_limit import limit_by_user
-from github.service import get_github_token, fetch_latest_commit
-
-
 
 router = APIRouter(prefix="/deployments")
 
@@ -42,7 +40,7 @@ def create_deployment(
         )
 
     if not project.repo_full_name or not project.repo_branch:
-        raise HTTPException(status_code=400, 
+        raise HTTPException(status_code=400,
         detail="This project has no linked Github repository or branch.")
 
     in_progress = db.query(Deployment.id).filter(

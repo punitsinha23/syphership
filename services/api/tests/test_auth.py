@@ -171,7 +171,11 @@ def test_callback_without_state_cookie_rejected(client, monkeypatch):
 def test_callback_with_forged_state_rejected(client, monkeypatch):
     mock_identity(monkeypatch, "github", github_identity())
     start_login(client, "github")
-    forged = create_token({"nonce": "attacker", "provider": "github"}, __import__("datetime").timedelta(minutes=5), "oauth_state")
+    forged = create_token(
+        {"nonce": "attacker", "provider": "github"},
+        __import__("datetime").timedelta(minutes=5),
+        "oauth_state",
+    )
 
     response = client.get("/github/callback", params={"code": "c", "state": forged}, follow_redirects=False)
 

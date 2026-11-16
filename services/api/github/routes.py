@@ -1,18 +1,17 @@
 import json
 
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from database import get_db
-from models.user import User
 from auth.dependencies import get_current_user
 from auth.oauth import complete_oauth, connect_url_response, redirect_to_provider
-from github.service import get_github_auth_url, fetch_github_identity, get_github_token, github_get
+from database import get_db
+from github.service import fetch_github_identity, get_github_auth_url, get_github_token, github_get
 from github.webhook import handle_push, is_new_delivery, project_secret, verify_signature
 from models.project import Project
+from models.user import User
 from services.errors import QueueUnavailable
 from services.rate_limit import limit_by_ip
-
 
 router = APIRouter(prefix="/github", tags=["GitHub"])
 

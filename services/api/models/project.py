@@ -1,7 +1,8 @@
-from database import Base
-from datetime import datetime, timezone
-from sqlalchemy import BigInteger, Boolean, Column, Integer, String, DateTime, ForeignKey, Text, text
+from datetime import UTC, datetime
 
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, ForeignKey, Integer, String, Text, text
+
+from database import Base
 
 
 class Project(Base):
@@ -11,7 +12,7 @@ class Project(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String, nullable=False)
     description = Column(String, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     # Linked GitHub repository (all null for projects without one)
     repo_id = Column(BigInteger)          # GitHub's repo id (can exceed 32-bit int)

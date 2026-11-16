@@ -1,5 +1,5 @@
-from fastapi import HTTPException
 import redis
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from github.service import get_github_token

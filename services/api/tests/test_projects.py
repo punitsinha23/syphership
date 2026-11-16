@@ -1,9 +1,15 @@
 import httpx
 import pytest
 import redis
+from fastapi import HTTPException
 
+import github.service
 import routes.projects
 import services.deployment_services
+from auth.security import encrypt_secret
+from models.user import OAuthAccount, User
+from tests.conftest import TestingSessionLocal
+
 
 def test_projects_requires_auth(client):
     response = client.get("/projects/")
@@ -196,13 +202,6 @@ def test_user_cannot_delete_other_users_project(client, auth_headers, user2_head
 
 # ---------- linked GitHub repository ----------
 
-import pytest
-from fastapi import HTTPException
-
-import github.service
-from auth.security import encrypt_secret
-from models.user import OAuthAccount, User
-from tests.conftest import TestingSessionLocal
 
 FAKE_REPO = {
     "id": 9_000_000_001,

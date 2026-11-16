@@ -1,0 +1,18 @@
+# Python lint settings for the API and worker. Run: ruff check .
+target-version = "py314"
+line-length = 120
+extend-exclude = ["migration/versions"]
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes: unused imports/variables, undefined names
+    "I",   # import sorting
+    "B",   # bugbear: likely bugs
+    "UP",  # newer Python syntax
+]
+ignore = [
+    "B008",  # FastAPI's Depends(...) in default arguments is the intended pattern
+    "UP042", # StrEnum would change str(status) from "DeploymentStatus.X" to "X" everywhere
+]

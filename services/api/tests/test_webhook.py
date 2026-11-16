@@ -344,7 +344,12 @@ def github_user(auth_headers):
     db = TestingSessionLocal()
     try:
         user = db.query(User).filter(User.email == "auth@example.com").one()
-        db.add(OAuthAccount(user_id=user.id, provider="github", provider_user_id="1", access_token=encrypt_secret("gho_test")))
+        db.add(OAuthAccount(
+            user_id=user.id,
+            provider="github",
+            provider_user_id="1",
+            access_token=encrypt_secret("gho_test"),
+        ))
         db.commit()
     finally:
         db.close()

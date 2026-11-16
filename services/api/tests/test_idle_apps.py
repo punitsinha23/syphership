@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -9,9 +9,8 @@ from models.deployment import Deployment, DeploymentStatus
 from models.project import Project
 from tests.conftest import TestingSessionLocal
 
-
 DOMAIN = "apps.example.com"
-NOW = datetime(2026, 11, 16, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture

@@ -1,7 +1,11 @@
+from datetime import UTC, datetime
 from enum import Enum
+
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import Enum as SQLEnum
+
 from database import Base
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum, Text, Index, text
-from datetime import datetime, timezone
+
 
 class DeploymentStatus(str, Enum):
     QUEUED = "QUEUED"
@@ -44,12 +48,12 @@ class Deployment(Base):
 
     created_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
     )
     updated_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
     # Last time the app got a request (or went live). Apps idle for too long are put to sleep.
     last_active_at = Column(DateTime(timezone=True), nullable=True)

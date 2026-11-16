@@ -1,4 +1,4 @@
-.PHONY: up down api worker workers workers-stop workers-logs install test logs
+.PHONY: up down api worker workers workers-stop workers-logs install test lint logs
 
 WORKERS ?= 2
 
@@ -26,10 +26,15 @@ workers-logs:
 	docker compose --profile workers logs -f worker
 
 install:
-	cd services/api && .venv/bin/pip install -r requirements.txt
+	cd services/api && .venv/bin/pip install -r requirements-dev.txt
 
 test:
 	cd services/api && .venv/bin/python -m pytest
+
+# Python (ruff, settings in services/api/ruff.toml) and frontend (eslint).
+lint:
+	cd services/api && .venv/bin/ruff check .
+	cd frontend && npx eslint src
 
 logs:
 	docker compose logs -f

@@ -5,9 +5,9 @@ import os
 import secrets
 from pathlib import Path
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import HTTPException
-import httpx
 from sqlalchemy.orm import Session
 
 from auth.security import decrypt_secret, encrypt_secret

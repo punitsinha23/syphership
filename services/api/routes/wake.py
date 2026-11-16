@@ -18,7 +18,6 @@ from models.deployment import Deployment, DeploymentStatus
 from models.project import Project
 from services.queue import publish_wake
 
-
 router = APIRouter(prefix="/apps")
 
 ALL_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
@@ -56,7 +55,9 @@ def _page(title: str, message: str, status_code: int, refresh: bool) -> HTMLResp
 </main>
 </body>
 </html>"""
-    headers = {"Retry-After": str(RETRY_SECONDS), "Cache-Control": "no-store"} if refresh else {"Cache-Control": "no-store"}
+    headers = {"Cache-Control": "no-store"}
+    if refresh:
+        headers["Retry-After"] = str(RETRY_SECONDS)
     return HTMLResponse(body, status_code=status_code, headers=headers)
 
 
@@ -101,7 +102,12 @@ def wake_app(project_id: int, db: Session = Depends(get_db)):
                     Deployment.status == DeploymentStatus.WAKING,
                 ).update({Deployment.status: DeploymentStatus.SLEEPING})
                 db.commit()
-                return _page(f"{name} is asleep", "It couldn't be woken up right now. Try again in a minute.", 503, refresh=False)
+                return _page(
+                    f"{name} is asleep",
+                    "It couldn't be woken up right now. Try again in a minute.",
+                    503,
+                    refresh=False,
+                )
 
     # SLEEPING (just queued), WAKING, or RUNNING while Caddy's route catches up.
     return _page(

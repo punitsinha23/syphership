@@ -6,7 +6,6 @@ from models.project import Project
 from services.app_routes import AppRoute
 from tests.conftest import TestingSessionLocal
 
-
 DOMAIN = "apps.example.com"
 RUNNING = DeploymentStatus.RUNNING
 SLEEPING = DeploymentStatus.SLEEPING

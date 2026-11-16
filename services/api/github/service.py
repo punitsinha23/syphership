@@ -1,14 +1,14 @@
 import os
 import re
 from urllib.parse import quote, urlencode
-from auth.security import decrypt_secret
-from models.user import OAuthAccount
-from fastapi import HTTPException
+
 import httpx
+from fastapi import HTTPException
 
 from auth.oauth import OAuthError
+from auth.security import decrypt_secret
+from models.user import OAuthAccount
 from services.validation import is_valid_branch
-
 
 SCOPES = "read:user user:email repo"
 
@@ -186,4 +186,4 @@ def fetch_latest_commit(token, full_name, branch):
 
     latest_commit = commits[0]["sha"]
     return latest_commit
-    
+

@@ -1,8 +1,6 @@
 
 import subprocess
 
-import pytest
-
 import services.repository_service as repository_service
 
 
@@ -43,7 +41,7 @@ def test_clone_repository_checks_out_requested_commit(tmp_path, monkeypatch):
 
     # Point the service's clone root at our temporary test directory.
     monkeypatch.setattr(repository_service, "DEPLOYMENT_ROOT", tmp_path / "deployments")
-    
+
     # Clone locally and request the first commit.
     result = repository_service.clone_repository(
         repo_url=str(source),

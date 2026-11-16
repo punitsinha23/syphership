@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
-from pathlib import Path
 import logging
 import os
 import shutil
+from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import HTTPException
 
@@ -11,28 +11,28 @@ from github.service import get_github_token
 from models.deployment import Deployment, DeploymentStatus
 from models.project import Project
 from models.user import User
+from services.app_routes import public_url, sync_app_routes
 from services.deployment_services import (
-    update_deployment_status,
     save_container_id,
+    update_deployment_status,
 )
-from services.repository_service import clone_repository
 from services.docker_services import (
     build_docker_image,
-    run_docker_container,
-    get_container_status,
     check_container_user,
     check_image_size,
     check_image_user,
+    deployment_resource_name,
+    get_container_status,
     get_exposed_port,
     get_host_port,
     remove_deployment_resources,
-    deployment_resource_name,
+    run_docker_container,
     start_container,
 )
-from services.app_routes import public_url, sync_app_routes
 from services.env_vars import read_env_vars
 from services.errors import DeploymentError
 from services.health_service import wait_for_healthy
+from services.repository_service import clone_repository
 from services.validation import scrub
 
 logger = logging.getLogger(__name__)
@@ -340,7 +340,7 @@ def run_deployment(deployment_id: int) -> None:
             deployment.host_port = host_port
             deployment.url = public_url(project.id, project.name) or health_url
             # Going live counts as activity, so a new app gets a full idle period.
-            deployment.last_active_at = datetime.now(timezone.utc)
+            deployment.last_active_at = datetime.now(UTC)
 
             # 7. DEPLOYING -> RUNNING
             update_deployment_status(
@@ -430,7 +430,7 @@ def wake_deployment(deployment_id: int) -> None:
                 .update({
                     Deployment.status: DeploymentStatus.RUNNING,
                     Deployment.host_port: host_port,
-                    Deployment.last_active_at: datetime.now(timezone.utc),
+                    Deployment.last_active_at: datetime.now(UTC),
                 })
             )
             db.commit()

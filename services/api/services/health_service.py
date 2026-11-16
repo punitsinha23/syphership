@@ -1,6 +1,9 @@
 import time
+
 import httpx
+
 from services.errors import DeploymentError
+
 
 def wait_for_healthy(url: str, timeout:float = 60, interval: float = 1) -> None:
     now = time.monotonic()

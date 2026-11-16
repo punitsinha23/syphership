@@ -1,10 +1,10 @@
-import subprocess
-from pathlib import Path
-import shutil
-from services.errors import BuildError, DeploymentError
 import json
 import os
+import shutil
+import subprocess
+from pathlib import Path
 
+from services.errors import BuildError, DeploymentError
 
 MAX_BUILD_LOG_CHARS = 100_000
 
@@ -79,7 +79,7 @@ def build_docker_image(
         repository_path: Path,
         deployment_id: int,
 ) -> tuple[str, str]:
-    
+
     if not isinstance(deployment_id, int) or deployment_id <= 0:
         raise ValueError("Invalid deployment ID")
 
@@ -325,7 +325,7 @@ def get_container_status(container_id: str) -> str:
 
     try:
         result = subprocess.run(
-            [ 
+            [
             "docker",
             "inspect",
             "--format",
@@ -351,7 +351,7 @@ def get_container_status(container_id: str) -> str:
 
     except FileNotFoundError:
         raise RuntimeError("Docker executable could not be found.") from None
-    
+
 
     return status
 
@@ -408,7 +408,7 @@ def get_host_port(container_id: str, container_port:int) -> int:
     if not isinstance(container_id, str) or not container_id.strip():
         raise ValueError("Invalid Container ID.")
 
-    if not isinstance(container_port, int) or not 0 < container_port <= 65535: 
+    if not isinstance(container_port, int) or not 0 < container_port <= 65535:
         raise ValueError("Invalid container port.")
 
     if shutil.which("docker") is None:

@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, update
 from sqlalchemy.orm import Session
@@ -14,7 +14,7 @@ REUSE_GRACE = timedelta(seconds=30)
 
 def issue_session(db: Session, user_id: int) -> dict:
     """New access and refresh tokens, with the refresh token on record."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     jti = secrets.token_urlsafe(32)
 
     db.execute(delete(RefreshToken).where(RefreshToken.expires_at < now))
@@ -29,7 +29,7 @@ def rotate_session(db: Session, user_id: int, jti: str | None) -> dict | None:
 
     A token used twice means someone else may have a copy, so every session
     of that user is ended."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # One UPDATE, so two requests can't both use the same token.
     used = db.execute(

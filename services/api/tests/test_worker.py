@@ -6,7 +6,6 @@ import redis
 import services.queue as queue
 import worker.__main__ as worker
 
-
 TEST_STREAM = "test:deployments"
 TEST_DEAD_STREAM = "test:deployments:dead"
 
@@ -27,7 +26,14 @@ def jobs(monkeypatch):
     monkeypatch.setattr(worker, "RECLAIM_IDLE_MS", 0)
 
     calls = []
-    for name in ("run_deployment", "recover_deployment", "fail_dead_lettered", "remove_deployment_resources", "wake_deployment"):
+    recorded = (
+        "run_deployment",
+        "recover_deployment",
+        "fail_dead_lettered",
+        "remove_deployment_resources",
+        "wake_deployment",
+    )
+    for name in recorded:
         monkeypatch.setattr(worker, name, lambda deployment_id, name=name: calls.append((name, deployment_id)))
 
     queue.redis_client.delete(TEST_STREAM, TEST_DEAD_STREAM)

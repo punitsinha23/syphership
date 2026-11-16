@@ -1,7 +1,9 @@
-from pathlib import Path
-from unittest.mock import patch
-import pytest
 import subprocess
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+import services.docker_services as docker_services
 from services.docker_services import (
     MAX_BUILD_LOG_CHARS,
     _trim_log,
@@ -12,9 +14,8 @@ from services.docker_services import (
     remove_deployment_resources,
     run_docker_container,
 )
-import services.docker_services as docker_services
 from services.errors import BuildError, DeploymentError
-from unittest.mock import MagicMock, patch
+
 
 def assert_docker_build_called(mock_run, tmp_path):
     mock_run.assert_called_once_with(

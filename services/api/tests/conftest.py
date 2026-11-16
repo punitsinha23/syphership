@@ -5,16 +5,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from database import Base, DATABASE_URL, get_db
-from models.user import User
-from models.project import Project
-from models.deployment import Deployment
-from auth.security import create_session_tokens
-from main import app
 import github.webhook
 import services.deployment_services
+from auth.security import create_session_tokens
+from database import DATABASE_URL, Base, get_db
+from main import app
+from models.user import User
 from services.queue import redis_client
-
 
 # Same server/credentials as the dev DB, separate "<db>_test" database
 TEST_DATABASE_URL = os.getenv(
