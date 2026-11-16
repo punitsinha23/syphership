@@ -4,6 +4,8 @@ from pathlib import Path
 import redis
 from dotenv import load_dotenv
 
+from services.logging_setup import request_id_var
+
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 
@@ -39,10 +41,16 @@ def ensure_group() -> None:
             raise
 
 
+def _job(fields: dict) -> dict:
+    """Add the current request ID, so the worker's logs for this job carry it too."""
+    request_id = request_id_var.get()
+    return {**fields, "request_id": request_id} if request_id else fields
+
+
 def publish(deployment_id: int) -> str:
     """Queue a deployment for the workers; returns the stream message ID."""
 
-    return redis_client.xadd(STREAM, {"deployment_id": deployment_id})
+    return redis_client.xadd(STREAM, _job({"deployment_id": deployment_id}))
 
 
 def publish_cleanup(deployment_id: int) -> str:
@@ -50,13 +58,13 @@ def publish_cleanup(deployment_id: int) -> str:
 
     Only workers touch Docker, so the public API needs no access to it."""
 
-    return redis_client.xadd(STREAM, {"action": ACTION_CLEANUP, "deployment_id": deployment_id})
+    return redis_client.xadd(STREAM, _job({"action": ACTION_CLEANUP, "deployment_id": deployment_id}))
 
 
 def publish_wake(deployment_id: int) -> str:
     """Queue starting a sleeping deployment's container; returns the message ID."""
 
-    return redis_client.xadd(STREAM, {"action": ACTION_WAKE, "deployment_id": deployment_id})
+    return redis_client.xadd(STREAM, _job({"action": ACTION_WAKE, "deployment_id": deployment_id}))
 
 
 def delivery_count(message_id: str) -> int:

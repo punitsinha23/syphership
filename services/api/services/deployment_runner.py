@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -33,6 +34,7 @@ from services.env_vars import read_env_vars
 from services.errors import DeploymentError
 from services.health_service import wait_for_healthy
 from services.log_stream import publish_end, publish_line
+from services.metrics import record_build
 from services.repository_service import clone_repository
 from services.validation import scrub
 
@@ -290,6 +292,8 @@ def run_deployment(deployment_id: int) -> None:
             )
 
             # 3. Build the Docker image.
+            build_started = time.monotonic()
+            build_succeeded = False
             try:
                 image_tag, build_logs = build_docker_image(
                     repository_path,
@@ -297,9 +301,11 @@ def run_deployment(deployment_id: int) -> None:
                     # Live logs; scrubbed too, so the GitHub token never reaches Redis.
                     on_line=lambda line: publish_line(deployment_id, scrub(line, token)),
                 )
+                build_succeeded = True
             finally:
                 # Success or failure, the live log ends with the build.
                 publish_end(deployment_id)
+                record_build(time.monotonic() - build_started, build_succeeded)
             deployment.build_logs = scrub(build_logs, token)
             check_image_size(image_tag)
             check_image_user(image_tag)

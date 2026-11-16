@@ -84,12 +84,21 @@ def pipeline(monkeypatch, tmp_path):
     live_log = []
     monkeypatch.setattr(runner, "publish_line", lambda deployment_id, line: live_log.append(line))
     monkeypatch.setattr(runner, "publish_end", lambda deployment_id: live_log.append("<end>"))
+    # Build metrics too: tests must not add to the real counters in Redis.
+    builds = []
+    monkeypatch.setattr(runner, "record_build", lambda seconds, succeeded: builds.append(succeeded))
 
     removed = []
     monkeypatch.setattr(runner, "remove_deployment_resources", removed.append)
     monkeypatch.setattr(runner, "DEPLOYMENT_HOST", "localhost")
 
-    return {"calls": calls, "repository_path": repository_path, "removed": removed, "live_log": live_log}
+    return {
+        "calls": calls,
+        "repository_path": repository_path,
+        "removed": removed,
+        "live_log": live_log,
+        "builds": builds,
+    }
 
 
 def fail_with(error):
@@ -688,3 +697,17 @@ def test_live_log_is_ended_when_the_build_fails(make_user, pipeline, monkeypatch
     runner.run_deployment(deployment_id)
 
     assert pipeline["live_log"] == ["<end>"]
+
+
+def test_successful_build_is_recorded_for_metrics(make_user, pipeline):
+    runner.run_deployment(create_queued_deployment(make_user))
+
+    assert pipeline["builds"] == [True]
+
+
+def test_failed_build_is_recorded_for_metrics(make_user, pipeline, monkeypatch):
+    monkeypatch.setattr(runner, "build_docker_image", fail_with(BuildError("Docker build failed.", "log")))
+
+    runner.run_deployment(create_queued_deployment(make_user))
+
+    assert pipeline["builds"] == [False]

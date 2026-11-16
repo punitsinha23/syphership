@@ -14,6 +14,7 @@ from services.deployment_runner import (
 )
 from services.docker_services import ensure_network, remove_deployment_resources
 from services.idle_apps import record_activity, sleep_idle_apps
+from services.logging_setup import deployment_id_var, new_request_id, request_id_var, setup_logging
 from services.queue import (
     ACTION_CLEANUP,
     ACTION_WAKE,
@@ -149,17 +150,36 @@ def handle_new(message_id: str, fields: dict) -> None:
     redis_client.xack(STREAM, GROUP, message_id)
 
 
+def with_job_context(handler, message_id: str, fields: dict) -> None:
+    """Run handler with the job's request and deployment IDs set for logging.
+
+    The request ID comes from the API request that queued the job, so one
+    deploy can be followed from the click to the end of the build."""
+    try:
+        deployment_id = int(fields.get("deployment_id"))
+    except (TypeError, ValueError):
+        deployment_id = None
+
+    request_token = request_id_var.set(fields.get("request_id") or new_request_id())
+    deployment_token = deployment_id_var.set(deployment_id)
+    try:
+        handler(message_id, fields)
+    finally:
+        request_id_var.reset(request_token)
+        deployment_id_var.reset(deployment_token)
+
+
 def poll_once() -> None:
     """Handle at most one job: abandoned ones first, then new ones."""
 
     claimed = redis_client.xautoclaim(STREAM, GROUP, CONSUMER, min_idle_time=RECLAIM_IDLE_MS, count=1)
     if claimed[1]:
-        handle_reclaimed(*claimed[1][0])
+        with_job_context(handle_reclaimed, *claimed[1][0])
         return
 
     response = redis_client.xreadgroup(GROUP, CONSUMER, block=2000, count=1, streams={STREAM: ">"})
     if response:
-        handle_new(*response[0][1][0])
+        with_job_context(handle_new, *response[0][1][0])
 
 
 def check_apps_if_due() -> None:
@@ -187,7 +207,7 @@ def check_apps_if_due() -> None:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    setup_logging()
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
     ensure_group()

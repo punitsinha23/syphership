@@ -9,11 +9,11 @@ down:
 	docker compose down
 
 api:
-	cd services/api && .venv/bin/python -m uvicorn main:app --reload --port 8000
+	cd services/api && LOG_FORMAT=text .venv/bin/python -m uvicorn main:app --reload --port 8000
 
 # One worker on this machine, logs in the terminal.
 worker:
-	cd services/api && .venv/bin/python -m worker
+	cd services/api && LOG_FORMAT=text .venv/bin/python -m worker
 
 # Workers in Docker. Pick how many with: make workers WORKERS=3
 workers:
