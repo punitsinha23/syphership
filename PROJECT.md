@@ -121,7 +121,7 @@ GitHub Repo ──► Syphership API ──► Redis Queue ──► Build Worke
 | 4 | First Real Deployment | ✅ Done | — |
 | 5 | Redis Queue + Scalable Workers | ✅ Done | Finished Nov 3 |
 | 6 | Security Hardening + Push-to-Deploy | ✅ Done | Finished Nov 6 |
-| 7 | Production Launch (URLs, HTTPS, logs, CI/CD, docs) | ⏳ Next | Launch Nov 10 |
+| 7 | Production Launch (URLs, HTTPS, logs, CI/CD, docs) | ✅ Done | Finished Nov 17 (live Nov 16) |
 
 Rule: if a phase runs over its dates, cut its **Stretch** tasks — do not push the next phase.
 
@@ -282,46 +282,48 @@ git push ──► GitHub ──► POST /github/webhook ──► verify HMAC �
 ### Must — Live URLs + HTTPS
 
 ```text
-Internet ──► DNS (*.apps.<domain>) ──► Caddy :443 ──► <project> container
+Internet ──► DuckDNS (*.syphership.duckdns.org) ──► Caddy :443 ──► <name>-<id> container
 ```
 
-- [ ] Caddy reverse proxy in front of the API, frontend, and deployed apps
-- [ ] Each deployment gets `https://<project-slug>.apps.<domain>` instead of `localhost:<port>`; the worker updates the route on deploy (Caddy admin API or generated config)
-- [ ] Automatic TLS (Let's Encrypt). Wildcard certs need a DNS challenge — alternatively use on-demand TLS or a free `sslip.io`/`nip.io` hostname
-- [ ] Deployed app ports are no longer published on the host
+- [x] Caddy reverse proxy in front of the API, frontend, and deployed apps
+- [x] Each project gets `https://<name>-<project id>.syphership.duckdns.org`; the worker rebuilds Caddy's app routes from the database and reloads Caddy through its admin API
+- [x] Automatic TLS (Let's Encrypt, one certificate per hostname; DuckDNS instead of a paid domain)
+- [x] Deployed app ports are published on 127.0.0.1 only; Caddy is the only way in
+- [x] *(added)* Idle apps sleep after 24 h (`docker stop`) and wake on the next visit (new `SLEEPING`/`WAKING` states)
 
 ### Must — Live build logs
 
-- [ ] Worker publishes log lines to Redis pub/sub (and still stores the full log in PostgreSQL)
-- [ ] `GET /deployments/{id}/logs/stream` using Server-Sent Events
-- [ ] Frontend log viewer streams live, then falls back to stored logs; cap log size
+- [x] Worker reads `docker build` line by line (`Popen`) and appends each line to a Redis **Stream** per deployment (Streams instead of pub/sub, so late visitors and reconnects get earlier lines); the full log is still stored in PostgreSQL
+- [x] `GET /deployments/{id}/logs/stream` using Server-Sent Events, resumable with `Last-Event-ID`
+- [x] Frontend streams live (fetch, since EventSource can't send the auth header), then shows the stored log; stream capped at ~5,000 lines
 
 ### Must — Observability
 
-- [ ] Structured JSON logs with `request_id` and `deployment_id` carried from API to worker (through the job payload)
+- [x] Structured JSON logs with `request_id` and `deployment_id` carried from API to worker (through the job payload)
 - [x] `/health` (liveness) and `/ready` (DB + Redis reachable) endpoints
-- [ ] `/metrics` in Prometheus format: request count/latency, deployments by status, build duration, queue depth
+- [x] `/metrics` in Prometheus format: request count/latency, deployments by status, build duration, queue depth (bearer token in production)
 
 ### Must — CI/CD and hosting
 
-- [ ] GitHub Actions: lint (ruff, eslint), backend tests with Postgres + Redis service containers, frontend build, Docker image build
-- [ ] Production `compose.prod.yaml`: API, worker(s), frontend (static build served by Caddy), PostgreSQL, Redis, Caddy; secrets from env, not committed
-- [ ] Deploy to a VPS / cloud VM; database backups (daily `pg_dump`)
-- [ ] One end-to-end test: create project → deploy sample repo → URL returns 200
+- [x] GitHub Actions: lint (ruff, eslint), backend tests with Postgres + Redis service containers, frontend build
+- [ ] Docker image build in CI *(the deploy job builds it on the server instead)*
+- [x] Production setup: one `compose.yaml` with `prod` and `workers` profiles (instead of a separate `compose.prod.yaml`); frontend served by Caddy; secrets in an untracked `.env`
+- [x] Deploy to a VPS (1 vCPU / 1 GB) automatically after CI passes on `main`; daily `pg_dump` backups with 7-day retention, restore tested
+- [ ] One automated end-to-end test (create project → deploy sample repo → URL returns 200) *(done by hand)*
 
 ### Must — Documentation (the resume part)
 
-- [ ] `README.md`: what it is, screenshot/GIF, architecture diagram, how to run locally, live demo link
-- [ ] `docs/ARCHITECTURE.md`: components, deployment flow, state machine, queue semantics, scaling story
+- [x] `README.md`: what it is, screenshots, architecture diagram, how to run locally, live demo link
+- [x] `docs/ARCHITECTURE.md`: components, deployment flow, state machine, queue semantics, scaling story
 - [x] `docs/SECURITY.md` (from Phase 6)
 - [ ] Short demo video
-- [ ] Resume bullets written (Section 13)
+- [x] Resume bullets written (Section 13)
 
 ### Stretch
 
-- [ ] Prometheus + Grafana dashboard (only if RAM allows)
+- [ ] Prometheus + Grafana dashboard (only if RAM allows) *(not on 1 GB)*
 - [ ] Rollback: redeploy a previous successful image
-- [ ] Deploy-on-merge for Syphership itself from GitHub Actions
+- [x] Deploy-on-merge for Syphership itself from GitHub Actions
 
 **Done when:** a stranger can open the live site, sign in, deploy a sample repo, and get a working HTTPS URL.
 
@@ -330,27 +332,16 @@ Internet ──► DNS (*.apps.<domain>) ──► Caddy :443 ──► <project
 # 6. Deployment State Machine
 
 ```text
-              ┌───────────┐
-              │  QUEUED   │
-              └─────┬─────┘
-                    │ worker claims job (conditional UPDATE)
-                    v
-              ┌───────────┐
-              │ BUILDING  │
-              └─────┬─────┘
-                ┌───┴───┐
-                v       v
-             FAILED  DEPLOYING
-                        │
-                    ┌───┴───┐
-                    v       v
-                 FAILED  RUNNING
-                            │ newer deployment of same project
-                            v
-                         STOPPED
+ QUEUED ──► BUILDING ──► DEPLOYING ──► RUNNING ◄──────────────┐
+   │           │             │           │  │                 │
+   └───────────┴─────────────┴──► FAILED ◄┘  │ idle 24 h       │ docker start
+                                             v                 │ + health check
+                                          SLEEPING ──visit──► WAKING
+                                             │                 │
+ RUNNING / SLEEPING / WAKING ──newer deployment goes live──► STOPPED
 ```
 
-Invalid transitions are rejected. Workers only move a deployment forward from the state they claimed it in, which is what makes duplicate job delivery safe.
+Invalid transitions are rejected (`ALLOWED_TRANSITIONS`). Every change from a shared state is a conditional `UPDATE … WHERE status = <expected>`, which is what makes duplicate job delivery and races (redeploy vs. wake-up) safe. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
@@ -366,12 +357,13 @@ deployments      id, project_id, status, commit_sha, container_id, host_port, ur
                  failure_reason, build_logs, created_at, updated_at
 ```
 
-Added in Phases 5–7:
+Added in Phases 5–7 (as built):
 
 ```text
-deployments      + attempts, image_tag, started_at, finished_at
-projects         + slug, auto_deploy
-project_env_vars id, project_id, key, value_encrypted, created_at
+deployments      + failed_stage, last_active_at; statuses STOPPED, SLEEPING, WAKING
+projects         + webhook_id, webhook_secret (encrypted), auto_deploy,
+                   env_vars (encrypted JSON)
+refresh_tokens   jti, user_id, expires_at, used_at   (rotation + reuse detection)
 ```
 
 ---
@@ -471,15 +463,17 @@ A feature is complete when:
 
 ---
 
-# 13. Resume Summary (target, true after Phase 7)
+# 13. Resume Summary
 
-**Syphership — self-hosted deployment platform (mini PaaS)**
+**Syphership — self-hosted deployment platform (mini PaaS)** · [syphership.duckdns.org](https://syphership.duckdns.org)
 *FastAPI, PostgreSQL, Redis Streams, Docker, React, Caddy, GitHub Actions*
 
-- Built a PaaS that deploys GitHub repositories to HTTPS subdomains on `git push`, using GitHub OAuth, HMAC-verified webhooks, and a Docker-based build pipeline.
-- Designed an at-least-once job pipeline on Redis Streams consumer groups with idempotent workers, a dead-letter queue, crash recovery, and graceful shutdown; scaled builds horizontally across worker replicas.
-- Sandboxed untrusted user code (non-root, dropped capabilities, resource limits, isolated network) and encrypted OAuth tokens and environment secrets at rest; added Redis rate limiting and cross-tenant authorization tests.
-- Streamed live build logs to the dashboard via Server-Sent Events; added structured logs with request/deployment IDs, Prometheus metrics, and CI with GitHub Actions.
+- Built a PaaS that deploys any Dockerized GitHub repository to its own HTTPS subdomain on `git push`, using GitHub OAuth, HMAC-verified webhooks, and a worker that clones, builds, sandboxes and health-checks each app.
+- Designed an at-least-once job pipeline on Redis Streams consumer groups with idempotent conditional-update claims, crash recovery (`XAUTOCLAIM`), a dead-letter queue, and graceful shutdown; workers scale horizontally.
+- Sandboxed untrusted code (non-root, all capabilities dropped, CPU/memory/PID limits, isolated network, localhost-only ports behind Caddy) and encrypted OAuth tokens and app secrets at rest; added rotating refresh tokens with reuse detection and Redis rate limiting.
+- Cut memory use on a 1 GB server by putting idle apps to sleep and waking them on the next request in ~3 s, with zero-downtime redeploys via database-driven Caddy routing.
+- Streamed live build logs to the browser over Server-Sent Events backed by Redis Streams; added JSON logs with request IDs propagated from API to worker, and Prometheus metrics.
+- Shipped with CI/CD on GitHub Actions (ruff, ~400 pytest tests against real PostgreSQL/Redis, eslint) that deploys the tested commit to a VPS over SSH, plus daily verified database backups.
 
 Only list what is actually implemented and understood.
 
@@ -487,11 +481,11 @@ Only list what is actually implemented and understood.
 
 ## Current Status
 
-**Phase:** 7 — Production Launch
-**Done:** Phases 0–6 (Phase 6 finished 2026-11-06)
-**Next:** Pick a VPS and domain, then `compose.prod.yaml` and Caddy
-**Launch target:** 2026-11-10
+**Phase:** 7 — Production Launch ✅ (all phases 0–7 done)
+**Live:** https://syphership.duckdns.org (open sign-ups since 2026-11-16)
+**Left from Phase 7:** demo video; automated end-to-end test; Docker image build in CI
+**Next:** post-launch backlog (Section 9)
 
 ---
 
-**Last updated:** 2026-11-06
+**Last updated:** 2026-11-17

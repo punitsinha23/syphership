@@ -172,3 +172,14 @@ def test_metrics_need_the_token_when_one_is_set(client, monkeypatch):
     assert client.get("/metrics").status_code == 404
     assert client.get("/metrics", headers={"Authorization": "Bearer wrong"}).status_code == 404
     assert client.get("/metrics", headers={"Authorization": "Bearer s3cret"}).status_code == 200
+
+
+def test_metrics_work_on_a_fresh_redis_before_any_worker_started(client, build_stats, monkeypatch):
+    # CI and a brand-new server: the job stream and its consumer group don't exist yet.
+    monkeypatch.setattr(metrics, "STREAM", "test:metrics:no-such-stream")
+
+    body = client.get("/metrics").text
+
+    assert "syphership_queue_length 0.0" in body
+    assert "syphership_queue_pending 0.0" in body
+    assert 'syphership_builds_total{outcome="succeeded"} 0.0' in body

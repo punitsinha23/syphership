@@ -10,7 +10,7 @@ function Terms() {
                 <p className="legal-updated">Last updated: November 6, 2026</p>
 
                 <p>
-                    Syphership is a personal project run by Punit Sinha, offered free of charge to invited users.
+                    Syphership is a personal project run by Punit Sinha, offered free of charge.
                     By using it, you agree to these terms.
                 </p>
 

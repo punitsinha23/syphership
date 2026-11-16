@@ -75,11 +75,11 @@ USER toor, with UID 0 in /etc/passwd   → passes the image check, refused by th
 
 ## Open work
 
-- **#2 Stronger isolation:** containers share the host kernel, so Docker alone is not strong isolation for untrusted code. Launch is invite-only. Consider gVisor or user namespace remapping on the server.
+- **#2 Stronger isolation:** containers share the host kernel, so Docker alone is not strong isolation for untrusted code. Sign-ups are open (a portfolio project, 1 app per user); for real untrusted users, consider gVisor or user namespace remapping on the server.
 - **Tokens:** access tokens last 1 hour and refresh tokens 7 days. Each refresh token works once, and reusing one more than 30 seconds later ends all of that user's sessions. Tokens are kept in the browser's local storage, so a cross-site scripting bug could expose them.
-- **Sign-ups:** set `ALLOWED_EMAILS` in production. If it's empty, anyone can create an account.
+- **Sign-ups:** open in production (`ALLOWED_EMAILS` empty). Setting it to a comma-separated list makes Syphership invite-only again.
 - **Env vars:** values are encrypted at rest and never returned by the API, but they are visible to the host through `docker inspect` and in the worker's `docker run` arguments.
 - **#6 Server logs:** tracebacks from unexpected errors (`logger.exception`) are not scrubbed. Users never see them, but anyone reading the worker logs could.
 - **#7 Key separation:** use a dedicated encryption key instead of deriving it from `SECRET_KEY`, so rotating one doesn't break the other.
-- **#9 Client IP behind a proxy:** once Caddy is in front (Phase 7), `request.client.host` will be Caddy's IP, so read the real one from a trusted header.
+- **#9 Client IP behind a proxy:** resolved. Caddy sends `X-Forwarded-For`, and uvicorn trusts it only from `127.0.0.1` (its default), so `request.client.host` and per-IP rate limits see the real visitor.
 - **Redis password:** add `--requirepass` as a second layer behind #1.

@@ -77,7 +77,7 @@ const LIMITS = [
     },
     {
         title: "Containers share one kernel",
-        text: "Docker keeps apps apart well, but they all run on the same machine. A serious kernel bug could break that wall. That's why the launch will be invite-only.",
+        text: "Docker keeps apps apart well, but they all run on the same machine. A serious kernel bug could break that wall. That's why each app runs without root, with every Linux capability dropped and strict CPU, memory and process limits.",
     },
     {
         title: "Encryption has a limit",

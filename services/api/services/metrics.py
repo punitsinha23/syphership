@@ -86,11 +86,19 @@ class SyphershipCollector(Collector):
 
     def _queue_and_builds(self):
         try:
-            length = redis_client.xlen(STREAM)
-            pending = redis_client.xpending(STREAM, GROUP)["pending"]
+            length = redis_client.xlen(STREAM)  # 0 if the stream doesn't exist yet
             stats = redis_client.hgetall(BUILD_STATS_KEY)
         except redis.exceptions.RedisError:
             logger.warning("Could not read the queue for metrics.")
+            return
+
+        try:
+            pending = redis_client.xpending(STREAM, GROUP)["pending"]
+        except redis.exceptions.ResponseError:
+            # No consumer group until the first worker starts: nothing pending.
+            pending = 0
+        except redis.exceptions.RedisError:
+            logger.warning("Could not read pending jobs for metrics.")
             return
 
         yield GaugeMetricFamily("syphership_queue_length", "Jobs in the deployment stream.", value=length)
