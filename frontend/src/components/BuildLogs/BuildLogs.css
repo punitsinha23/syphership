@@ -72,3 +72,34 @@
   text-align: right;
   user-select: none;
 }
+
+/* "Live" marker while lines are still streaming in */
+.build-logs-header .build-logs-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  color: var(--color-status-running);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.build-logs-header .build-logs-live::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: build-logs-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes build-logs-blink {
+  50% { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .build-logs-header .build-logs-live::before {
+    animation: none;
+  }
+}

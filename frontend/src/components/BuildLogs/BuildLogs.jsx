@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import "./BuildLogs.css";
 
-// logs: the raw build output from the API (one string), or null
-export default function BuildLogs({ logs = null, pending = false }) {
+// logs: the build output (one string), or null
+// live: lines are still arriving, so show a "Live" marker
+export default function BuildLogs({ logs = null, pending = false, live = false }) {
   const contentRef = useRef(null);
   const lines = logs ? logs.replace(/\n$/, "").split("\n") : [];
 
@@ -16,7 +17,10 @@ export default function BuildLogs({ logs = null, pending = false }) {
   return (
     <div className="build-logs">
       <div className="build-logs-header">
-        <h3>Build output</h3>
+        <h3>
+          Build output
+          {live && <span className="build-logs-live">Live</span>}
+        </h3>
         <span>{lines.length} {lines.length === 1 ? "line" : "lines"}</span>
       </div>
 
@@ -24,7 +28,7 @@ export default function BuildLogs({ logs = null, pending = false }) {
         <div className="build-logs-empty">
           <span className="build-logs-prompt">$</span>
           {pending
-            ? "Building… output appears here when the build finishes."
+            ? "Waiting for build output…"
             : "No build output for this deployment."}
         </div>
       ) : (

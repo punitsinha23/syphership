@@ -1,4 +1,5 @@
 import subprocess
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -17,37 +18,80 @@ from services.docker_services import (
 from services.errors import BuildError, DeploymentError
 
 
-def assert_docker_build_called(mock_run, tmp_path):
-    mock_run.assert_called_once_with(
-        [
-            "docker",
-            "build",
-            "--progress=plain",
-            "--tag",
-            "syphership-deployment-1:latest",
-            "--file",
-            str(tmp_path / "Dockerfile"),
-            str(tmp_path),
-        ],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        timeout=600,
-    )
+class FakeBuild:
+    """Stands in for the docker build process started with subprocess.Popen.
+
+    Yields `output` line by line; with hang=True it then waits until kill()
+    is called, like a build that never finishes."""
+
+    def __init__(self, output="", returncode=0, hang=False):
+        self._lines = output.splitlines(keepends=True)
+        self.returncode = returncode
+        self.hang = hang
+        self.killed = threading.Event()
+        self.stdout = self
+        self.args = None
+        self.kwargs = None
+
+    def __call__(self, args, **kwargs):  # used as the patched Popen
+        self.args, self.kwargs = args, kwargs
+        return self
+
+    def __iter__(self):
+        yield from self._lines
+        if self.hang:
+            self.killed.wait(timeout=5)
+
+    def kill(self):
+        self.returncode = -9
+        self.killed.set()
+
+    def poll(self):
+        return None if self.hang and not self.killed.is_set() else self.returncode
+
+    def wait(self):
+        return self.returncode
+
+    def close(self):
+        pass
+
+
+def build_with(fake, tmp_path, **kwargs):
+    (tmp_path / "Dockerfile").write_text("FROM python:3.12-slim\n")
+    with patch("services.docker_services.subprocess.Popen", fake):
+        return build_docker_image(tmp_path, deployment_id=1, **kwargs)
 
 
 def test_build_docker_image(tmp_path):
-    dockerfile = tmp_path / "Dockerfile"
-    dockerfile.write_text("FROM python:3.12-slim\n")
+    fake = FakeBuild("#1 [internal] load build definition\n#2 DONE\n")
 
-    with patch('services.docker_services.subprocess.run') as mock_run:
-        mock_run.return_value = MagicMock(stdout="#1 [internal] load build definition\n#2 DONE\n")
-        image_tag, logs = build_docker_image(tmp_path, deployment_id=1)
+    image_tag, logs = build_with(fake, tmp_path)
 
     assert image_tag == "syphership-deployment-1:latest"
     assert logs == "#1 [internal] load build definition\n#2 DONE\n"
-    assert_docker_build_called(mock_run, tmp_path)
+    assert fake.args == [
+        "docker",
+        "build",
+        "--progress=plain",
+        "--tag",
+        "syphership-deployment-1:latest",
+        "--file",
+        str(tmp_path / "Dockerfile"),
+        str(tmp_path),
+    ]
+    # One ordered stream, read line by line as it's printed.
+    assert fake.kwargs["stdout"] == subprocess.PIPE
+    assert fake.kwargs["stderr"] == subprocess.STDOUT
+    assert fake.kwargs["bufsize"] == 1
+
+
+def test_each_line_is_passed_on_as_it_is_read(tmp_path):
+    seen = []
+
+    build_with(FakeBuild("#1 first\n#2 second\n"), tmp_path, on_line=seen.append)
+
+    assert seen == ["#1 first", "#2 second"]
+
 
 def test_build_docker_image_missing_directory(tmp_path):
     missing_path = tmp_path / "does_not_exist"
@@ -72,46 +116,36 @@ def test_deployment_id_is_neg(tmp_path):
     with pytest.raises(ValueError, match="Invalid deployment ID"):
         build_docker_image(tmp_path, deployment_id=-1)
 
-def test_docker_timeout(tmp_path):
-    dockerfile = tmp_path / "Dockerfile"
-    dockerfile.write_text("FROM python:3.12-slim\n")
+def test_docker_timeout(tmp_path, monkeypatch):
+    monkeypatch.setattr(docker_services, "BUILD_TIMEOUT_SECONDS", 0.2)
+    fake = FakeBuild("#5 RUN npm install\n", hang=True)
 
-    with patch("services.docker_services.subprocess.run") as mock_run:
-        # TimeoutExpired can carry bytes even when text=True was passed.
-        mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd="docker build",
-            timeout=600,
-            output=b"#5 RUN npm install\n",
-        )
+    with pytest.raises(BuildError, match="Docker build timed out") as error:
+        build_with(fake, tmp_path)
 
-        with pytest.raises(
-            BuildError,
-            match="Docker build timed out",
-        ) as error:
-            build_docker_image(tmp_path, deployment_id=1)
+    assert fake.killed.is_set()
+    assert error.value.logs == "#5 RUN npm install\n"
 
-        assert error.value.logs == "#5 RUN npm install\n"
-        assert_docker_build_called(mock_run, tmp_path)
 
 def test_docker_build_fail(tmp_path):
-    dockerfile = tmp_path / "Dockerfile"
-    dockerfile.write_text("FROM python:3.12-slim\n")
+    fake = FakeBuild("#6 RUN npm run build\nnpm ERR! missing script: build\n", returncode=1)
 
-    with patch("services.docker_services.subprocess.run") as mock_run:
-        mock_run.side_effect = subprocess.CalledProcessError(
-                returncode=1,
-                cmd="docker build",
-                output="#6 RUN npm run build\nnpm ERR! missing script: build\n",
-                )
+    with pytest.raises(BuildError, match="Docker build failed") as error:
+        build_with(fake, tmp_path)
 
-        with pytest.raises(
-            BuildError,
-            match="Docker build failed"
-        ) as error:
-            build_docker_image(tmp_path, deployment_id=1)
+    assert "npm ERR! missing script: build" in error.value.logs
 
-        assert "npm ERR! missing script: build" in error.value.logs
-        assert_docker_build_called(mock_run, tmp_path)
+
+def test_build_that_breaks_off_does_not_leave_docker_running(tmp_path):
+    fake = FakeBuild("#1 step\n", hang=True)
+
+    def broken(line):
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        build_with(fake, tmp_path, on_line=broken)
+
+    assert fake.killed.is_set()
 
 
 def test_build_error_is_a_deployment_error():
@@ -120,13 +154,8 @@ def test_build_error_is_a_deployment_error():
 
 
 def test_build_failure_without_output_has_empty_logs(tmp_path):
-    (tmp_path / "Dockerfile").write_text("FROM python:3.12-slim\n")
-
-    with patch("services.docker_services.subprocess.run") as mock_run:
-        mock_run.side_effect = subprocess.CalledProcessError(returncode=1, cmd="docker build")
-
-        with pytest.raises(BuildError) as error:
-            build_docker_image(tmp_path, deployment_id=1)
+    with pytest.raises(BuildError) as error:
+        build_with(FakeBuild("", returncode=1), tmp_path)
 
     assert error.value.logs == ""
 

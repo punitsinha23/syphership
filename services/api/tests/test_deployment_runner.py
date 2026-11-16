@@ -80,12 +80,16 @@ def pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr(runner, "get_host_port", record("host_port", 49153))
     monkeypatch.setattr(runner, "wait_for_healthy", record("health"))
     monkeypatch.setattr(runner, "sync_app_routes", record("routes"))
+    # Live log lines go to a list instead of the real Redis.
+    live_log = []
+    monkeypatch.setattr(runner, "publish_line", lambda deployment_id, line: live_log.append(line))
+    monkeypatch.setattr(runner, "publish_end", lambda deployment_id: live_log.append("<end>"))
 
     removed = []
     monkeypatch.setattr(runner, "remove_deployment_resources", removed.append)
     monkeypatch.setattr(runner, "DEPLOYMENT_HOST", "localhost")
 
-    return {"calls": calls, "repository_path": repository_path, "removed": removed}
+    return {"calls": calls, "repository_path": repository_path, "removed": removed, "live_log": live_log}
 
 
 def fail_with(error):
@@ -661,3 +665,26 @@ def test_docker_outage_does_not_fail_every_app(make_user, pipeline, monkeypatch)
         runner.fail_dead_deployments()
 
     assert get_deployment(deployment_id).status == DeploymentStatus.RUNNING
+
+
+def test_live_log_lines_are_scrubbed_and_the_stream_is_ended(make_user, pipeline, monkeypatch):
+    def build_printing_the_token(repository_path, deployment_id, on_line=None):
+        on_line("#3 git fetch https://x-access-token:gho_test@github.com/octo/app")
+        return "syphership-deployment-1:latest", "log"
+    monkeypatch.setattr(runner, "build_docker_image", build_printing_the_token)
+    deployment_id = create_queued_deployment(make_user)
+
+    runner.run_deployment(deployment_id)
+
+    assert len(pipeline["live_log"]) == 2
+    assert "gho_test" not in pipeline["live_log"][0]
+    assert pipeline["live_log"][1] == "<end>"
+
+
+def test_live_log_is_ended_when_the_build_fails(make_user, pipeline, monkeypatch):
+    monkeypatch.setattr(runner, "build_docker_image", fail_with(BuildError("Docker build failed.", "log")))
+    deployment_id = create_queued_deployment(make_user)
+
+    runner.run_deployment(deployment_id)
+
+    assert pipeline["live_log"] == ["<end>"]

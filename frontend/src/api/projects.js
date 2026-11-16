@@ -1,4 +1,4 @@
-import { apiFetch } from "./client"
+import { apiFetch, authorizedFetch } from "./client"
 
 export function getProjects() {
     return apiFetch("/projects/")
@@ -98,6 +98,41 @@ export function deleteDeployment(deployment_id) {
 
 export function getDeploymentLogs(deployment_id) {
     return apiFetch(`/deployments/${deployment_id}/logs`)
+}
+
+// Follow a build's output live (Server-Sent Events). Calls onLine(text) for each
+// line, from the start of the build, and resolves when the build output ends.
+// fetch instead of EventSource, because EventSource can't send the
+// Authorization header. Stop it early with an AbortController's signal.
+export async function streamDeploymentLogs(deployment_id, { onLine, signal }) {
+    const response = await authorizedFetch(`/deployments/${deployment_id}/logs/stream`, { signal })
+    if (!response.ok || !response.body) {
+        throw new Error(`Live logs unavailable (${response.status})`)
+    }
+
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+    let buffer = ""
+
+    while (true) {
+        const { value, done } = await reader.read()
+        if (done) return
+        buffer += value
+
+        // Events are separated by a blank line; the last piece may be incomplete.
+        const events = buffer.split("\n\n")
+        buffer = events.pop()
+
+        for (const event of events) {
+            let type = "message"
+            let data = null
+            for (const line of event.split("\n")) {
+                if (line.startsWith("event: ")) type = line.slice(7)
+                else if (line.startsWith("data: ")) data = line.slice(6)
+            }
+            if (type === "end") return
+            if (type === "message" && data) onLine(JSON.parse(data))
+        }
+    }
 }
 
 export function getDeployment(deployment_id){

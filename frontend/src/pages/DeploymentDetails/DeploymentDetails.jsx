@@ -1,4 +1,4 @@
-import { deleteDeployment, getDeployment, getDeploymentLogs, getProjectDetails } from "../../api/projects"
+import { deleteDeployment, getDeployment, getDeploymentLogs, getProjectDetails, streamDeploymentLogs } from "../../api/projects"
 import { isInProgress, isLive } from "../../utils/deployment"
 import { usePolling } from "../../hooks/usePolling"
 import { useState, useEffect } from "react"
@@ -24,6 +24,8 @@ function DeploymentDetails() {
     const [error, setError] = useState(null)
     const [loading, setLoading] = useState(true)
     const [buildLogs, setBuildLogs] = useState(null)
+    // Lines streamed while the build runs; the stored log replaces them once saved
+    const [liveLines, setLiveLines] = useState([])
     const [deleting, setDeleting] = useState(false)
     const [deleteError, setDeleteError] = useState(null)
 
@@ -85,6 +87,41 @@ function DeploymentDetails() {
         }, [deployment_id])
 
     const inProgress = isInProgress(deploymentDetails?.status)
+
+    // Stream the build output live while the deployment is in progress
+    useEffect(() => {
+        if (!inProgress) return
+
+        const controller = new AbortController()
+        const pending = []
+        let first = true
+
+        // Lines are added in batches, 5 times a second, not one render per line
+        function flush() {
+            if (controller.signal.aborted || pending.length === 0) return
+            const batch = pending.splice(0)
+            const replace = first
+            first = false
+            // The stream starts from the build's first line, so the first batch replaces
+            setLiveLines((lines) => (replace ? batch : [...lines, ...batch]))
+        }
+
+        const timer = setInterval(flush, 200)
+
+        streamDeploymentLogs(deployment_id, {
+            onLine: (line) => pending.push(line),
+            signal: controller.signal,
+        })
+            .catch(() => {
+                // Live logs are a bonus: polling still loads the stored log
+            })
+            .finally(flush)
+
+        return () => {
+            controller.abort()
+            clearInterval(timer)
+        }
+    }, [inProgress, deployment_id])
 
     // Follow the pipeline live until the deployment finishes
     usePolling(inProgress, async () => {
@@ -222,7 +259,11 @@ function DeploymentDetails() {
                         </section>
 
                         <section className="section">
-                            <BuildLogs logs={buildLogs} pending={inProgress} />
+                            <BuildLogs
+                                logs={buildLogs ?? (liveLines.length > 0 ? liveLines.join("\n") : null)}
+                                pending={inProgress}
+                                live={inProgress && !buildLogs && liveLines.length > 0}
+                            />
                         </section>
                     </>
                 )}

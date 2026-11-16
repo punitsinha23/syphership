@@ -2,11 +2,14 @@ import json
 import os
 import shutil
 import subprocess
+import threading
+from collections.abc import Callable
 from pathlib import Path
 
 from services.errors import BuildError, DeploymentError
 
 MAX_BUILD_LOG_CHARS = 100_000
+BUILD_TIMEOUT_SECONDS = 600
 
 # Per-container limits so one app cannot starve the host or the other apps.
 CONTAINER_CPUS = os.getenv("DEPLOYMENT_CPUS", "0.5")
@@ -78,7 +81,12 @@ def _trim_log(output: str) -> str:
 def build_docker_image(
         repository_path: Path,
         deployment_id: int,
+        on_line: Callable[[str], None] | None = None,
 ) -> tuple[str, str]:
+    """Build the image; returns (image tag, build log).
+
+    on_line, if given, gets each output line as docker prints it (for live
+    logs). Raises BuildError, with the log, if the build fails or times out."""
 
     if not isinstance(deployment_id, int) or deployment_id <= 0:
         raise ValueError("Invalid deployment ID")
@@ -98,39 +106,63 @@ def build_docker_image(
     if shutil.which("docker") is None:
         raise RuntimeError("Docker is not installed or is not available in PATH.")
 
+    command = [
+        "docker",
+        "build",
+        "--progress=plain",
+        "--tag",
+        image_tag,
+        "--file",
+        str(dockerfile),
+        str(repository_path),
+    ]
+
     try:
-        result = subprocess.run(
-            [
-                "docker",
-                "build",
-                "--progress=plain",
-                "--tag",
-                image_tag,
-                "--file",
-                str(dockerfile),
-                str(repository_path),
-            ],
-            check=True,
+        process = subprocess.Popen(
+            command,
             # One stream, in order: BuildKit writes its progress to stderr.
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            timeout=600,
+            errors="replace",  # a stray non-UTF-8 byte must not crash the build
+            bufsize=1,  # line by line, so each line arrives as soon as it's printed
         )
-    except subprocess.TimeoutExpired as e:
-        raise BuildError(
-            "Docker build timed out after 10 minutes.",
-            _trim_log(_output_text(e.output)),
-        ) from None
-    except subprocess.CalledProcessError as e:
-        raise BuildError(
-            "Docker build failed. See the build logs for details.",
-            _trim_log(_output_text(e.output)),
-        ) from None
     except FileNotFoundError:
         raise RuntimeError("Docker executable could not be found.") from None
 
-    return image_tag, _trim_log(result.stdout or "")
+    # Popen has no timeout; this timer kills the build if it runs too long.
+    timed_out = threading.Event()
+
+    def kill_build():
+        timed_out.set()
+        process.kill()
+
+    timer = threading.Timer(BUILD_TIMEOUT_SECONDS, kill_build)
+    timer.start()
+
+    lines = []
+    try:
+        for line in process.stdout:
+            lines.append(line)
+            if on_line is not None:
+                on_line(line.rstrip("\n"))
+        returncode = process.wait()
+    finally:
+        timer.cancel()
+        # If the loop broke off early, don't leave docker build running.
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        process.stdout.close()
+
+    output = _trim_log("".join(lines))
+
+    if timed_out.is_set():
+        raise BuildError(f"Docker build timed out after {BUILD_TIMEOUT_SECONDS // 60} minutes.", output)
+    if returncode != 0:
+        raise BuildError("Docker build failed. See the build logs for details.", output)
+
+    return image_tag, output
 
 
 

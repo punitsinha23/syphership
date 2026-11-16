@@ -1,5 +1,8 @@
+import re
+
 import redis
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from auth.dependencies import get_current_user
@@ -14,6 +17,7 @@ from schemas.deployment import (
 )
 from services.deployment_services import IN_PROGRESS_STATUSES, queue_deployment
 from services.errors import AppLimitReached, DeploymentInProgress, QueueUnavailable
+from services.log_stream import end_event, read_events, stream_exists
 from services.queue import publish_cleanup
 from services.rate_limit import limit_by_user
 
@@ -118,6 +122,48 @@ def get_deployment_logs(
         )
 
     return deployment_db
+
+# A Redis Stream entry ID, e.g. "1794840605158-0"
+STREAM_ID = re.compile(r"\d+-\d+")
+
+
+@router.get("/{deployment_id}/logs/stream")
+def stream_deployment_logs(
+    deployment_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+    last_event_id: str | None = Header(default=None),
+):
+    """The build output as Server-Sent Events, live while the build runs.
+
+    Sends the lines printed so far, then each new one as it appears, then an
+    "end" event. A client that reconnects sends Last-Event-ID to resume."""
+    deployment_db = db.query(Deployment).join(Project).filter(
+        Deployment.id == deployment_id,
+        Project.user_id == user.id
+    ).first()
+
+    if deployment_db is None:
+        raise HTTPException(status_code=404, detail="Deployment not found")
+
+    # Finished and nothing live left: the stored log (GET .../logs) has it all.
+    finished = deployment_db.status not in IN_PROGRESS_STATUSES
+    if finished and not stream_exists(deployment_id):
+        events = iter([end_event()])
+    else:
+        start = last_event_id if last_event_id and STREAM_ID.fullmatch(last_event_id) else "0"
+        events = read_events(deployment_id, start)
+
+    return StreamingResponse(
+        events,
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            # Tell proxies not to hold lines back until the response ends.
+            "X-Accel-Buffering": "no",
+        },
+    )
+
 
 @router.delete("/{deployment_id}")
 def delete_deployment(

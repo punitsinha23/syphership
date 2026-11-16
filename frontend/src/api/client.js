@@ -90,7 +90,9 @@ function send(path, options, token) {
     })
 }
 
-export async function apiFetch(path, options = {}) {
+// fetch with the session token; on 401 it refreshes the token once and retries.
+// Returns the raw Response, so callers can also read it as a stream.
+export async function authorizedFetch(path, options = {}) {
     let response = await send(path, options, localStorage.getItem("access_token"))
 
     if (response.status === 401) {
@@ -107,6 +109,12 @@ export async function apiFetch(path, options = {}) {
             throw requestError("Session expired. Please log in again.", 401)
         }
     }
+
+    return response
+}
+
+export async function apiFetch(path, options = {}) {
+    const response = await authorizedFetch(path, options)
 
     if (!response.ok) {
         let errorMessage = `Request failed with status ${response.status}`
