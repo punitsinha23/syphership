@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 import re
 import secrets
@@ -24,6 +25,8 @@ STATE_TTL = timedelta(minutes=10)
 LOGIN_CODE_TTL = timedelta(seconds=60)
 
 PROVIDER_NAMES = {"github": "GitHub", "google": "Google"}
+
+logger = logging.getLogger("uvicorn.error")
 
 # Invite-only: when set, only these emails can create an account. Existing
 # users can always sign in. Empty means anyone can sign up.
@@ -203,6 +206,8 @@ def sign_in_with_provider(
 
         if user is None:
             if ALLOWED_EMAILS and email not in ALLOWED_EMAILS:
+                # Logged so the admin can see who tried and add them if wanted.
+                logger.warning("Invite-only: rejected %s sign-up for %s", name, email)
                 raise OAuthError("Syphership is invite-only right now, and this email isn't on the list.")
 
             user = User(
