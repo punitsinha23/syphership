@@ -21,6 +21,8 @@ services:
     volumes:
 
       - syphership-postgres-data:/var/lib/postgresql/data
+    
+    restart: unless-stopped
 
   redis:
 
@@ -39,6 +41,8 @@ services:
     volumes:
 
       - syphership-redis-data:/data
+    
+    restart: unless-stopped
 
   # Build workers. Not started by a plain "docker compose up"; run them with
   # docker compose --profile workers up --build --scale worker=2
@@ -65,6 +69,38 @@ services:
 
     # Let the current build finish on "docker stop" (build timeout is 10 min).
     stop_grace_period: 15m
+
+    depends_on:
+
+      - postgres
+
+      - redis
+
+    restart: unless-stopped
+
+  # API server. Only for the server; on your laptop you still use "make api".
+  # Start it with: docker compose --profile prod up -d --build
+  api:
+
+    profiles: ["prod"]
+
+    # Same image as the worker: Python 3.14 and all of services/api.
+    build:
+
+      context: services/api
+
+      dockerfile: worker/Dockerfile
+
+    command: ["uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000"]
+
+    env_file: .env
+
+    # Localhost only: Caddy is the public entry point and proxies to 127.0.0.1:8000.
+    network_mode: host
+
+    # No docker.sock here: the API doesn't build or run containers.
+
+    restart: unless-stopped
 
     depends_on:
 
