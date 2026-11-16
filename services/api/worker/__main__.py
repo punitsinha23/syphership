@@ -23,6 +23,7 @@ from services.deployment_runner import (
     recover_deployment,
     run_deployment,
 )
+from services.app_routes import sync_app_routes
 from services.docker_services import ensure_network, remove_deployment_resources
 
 
@@ -73,6 +74,8 @@ def handle_cleanup(message_id: str, deployment_id: int) -> None:
         logger.exception("Could not clean up deployment %s; it will be retried.", deployment_id)
         return
     logger.info("Cleaned up deployment %s.", deployment_id)
+    # Its row is already deleted, so this drops the app's URL if it was live.
+    sync_app_routes()
     redis_client.xack(STREAM, GROUP, message_id)
 
 
@@ -150,6 +153,9 @@ def check_apps_if_due() -> None:
         # A failed check must not stop the worker from building.
         logger.exception("Could not check running apps.")
 
+    # Drops routes of apps that died, and retries a reload that failed earlier.
+    sync_app_routes()
+
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -157,6 +163,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, request_stop)
     ensure_group()
     ensure_network()
+    sync_app_routes()
     logger.info("Worker %s started.", CONSUMER)
     while not stopping:
         poll_once()

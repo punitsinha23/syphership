@@ -80,6 +80,7 @@ def pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr(runner, "get_container_status", record("status", "running"))
     monkeypatch.setattr(runner, "get_host_port", record("host_port", 49153))
     monkeypatch.setattr(runner, "wait_for_healthy", record("health"))
+    monkeypatch.setattr(runner, "sync_app_routes", record("routes"))
 
     removed = []
     monkeypatch.setattr(runner, "remove_deployment_resources", removed.append)
@@ -119,7 +120,33 @@ def test_successful_deployment_is_running_with_url(make_user, pipeline):
         "container_user",
         "host_port",
         "health",
+        "routes",
     ]
+
+
+def test_with_apps_domain_url_is_public_https_and_health_check_stays_local(make_user, pipeline, monkeypatch):
+    monkeypatch.setattr("services.app_routes.APPS_DOMAIN", "apps.example.com")
+    checked = []
+    monkeypatch.setattr(runner, "wait_for_healthy", checked.append)
+    deployment_id = create_queued_deployment(make_user)
+
+    runner.run_deployment(deployment_id)
+
+    deployment = get_deployment(deployment_id)
+    assert deployment.status == DeploymentStatus.RUNNING
+    assert deployment.url == f"https://runner-test-project-{deployment.project_id}.apps.example.com"
+    assert checked == ["http://localhost:49153"]
+
+
+def test_routes_move_to_the_new_deployment_before_the_old_one_stops(make_user, pipeline, monkeypatch):
+    order = []
+    monkeypatch.setattr(runner, "sync_app_routes", lambda: order.append("routes"))
+    monkeypatch.setattr(runner, "_stop_previous_deployments", lambda db, deployment: order.append("stop_old"))
+    deployment_id = create_queued_deployment(make_user)
+
+    runner.run_deployment(deployment_id)
+
+    assert order == ["routes", "stop_old"]
 
 
 def test_cloned_repository_is_removed_afterwards(make_user, pipeline):

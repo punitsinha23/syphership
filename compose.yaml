@@ -67,6 +67,10 @@ services:
       # Builds and runs deployments on the host's Docker.
       - /var/run/docker.sock:/var/run/docker.sock
 
+      # Caddy's config, so the worker can write app routes (services/app_routes.py).
+      # On the server set CADDY_DIR=/etc/caddy in .env; locally an unused ./.caddy is made.
+      - ${CADDY_DIR:-./.caddy}:/etc/caddy
+
     # Let the current build finish on "docker stop" (build timeout is 10 min).
     stop_grace_period: 15m
 

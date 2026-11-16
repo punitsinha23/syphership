@@ -25,3 +25,6 @@ dist/
 docker-compose.override.yml
 
 
+
+# Local stand-in for /etc/caddy (see compose.yaml)
+.caddy/

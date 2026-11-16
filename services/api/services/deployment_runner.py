@@ -26,6 +26,7 @@ from services.docker_services import (
     get_host_port,
     remove_deployment_resources,
 )
+from services.app_routes import public_url, sync_app_routes
 from services.env_vars import read_env_vars
 from services.errors import DeploymentError
 from services.health_service import wait_for_healthy
@@ -33,7 +34,7 @@ from services.validation import scrub
 
 logger = logging.getLogger(__name__)
 
-# Hostname used to build deployment URLs (Phase 4: containers run locally).
+# Hostname the worker uses to reach apps (they're published on 127.0.0.1).
 DEPLOYMENT_HOST = os.getenv("DEPLOYMENT_HOST", "localhost")
 
 
@@ -319,15 +320,16 @@ def run_deployment(deployment_id: int) -> None:
 
             check_container_user(container_id)
 
-            # Find the host port Docker picked and store the URL.
+            # Find the host port Docker picked. The worker checks the app there;
+            # users get the public HTTPS URL when APPS_DOMAIN is set.
             host_port = get_host_port(container_id, container_port)
-            url = f"http://{DEPLOYMENT_HOST}:{host_port}"
+            health_url = f"http://{DEPLOYMENT_HOST}:{host_port}"
 
             # Only save the URL once the app actually answers requests.
-            wait_for_healthy(url)
+            wait_for_healthy(health_url)
 
             deployment.host_port = host_port
-            deployment.url = url
+            deployment.url = public_url(project.id, project.name) or health_url
 
             # 7. DEPLOYING -> RUNNING
             update_deployment_status(
@@ -341,7 +343,9 @@ def run_deployment(deployment_id: int) -> None:
                 deployment_id,
             )
 
-            # 8. The new version is live; retire the old ones.
+            # 8. Point the app's URL at the new container, then retire the old
+            # ones, so the URL keeps working during a redeploy.
+            sync_app_routes()
             _stop_previous_deployments(db, deployment)
 
         except DeploymentError as error:
