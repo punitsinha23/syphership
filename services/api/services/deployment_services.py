@@ -24,7 +24,20 @@ ALLOWED_TRANSITIONS = {
     ],
     DeploymentStatus.RUNNING: [
         DeploymentStatus.STOPPED,
-        DeploymentStatus.FAILED
+        DeploymentStatus.FAILED,
+        DeploymentStatus.SLEEPING,
+    ],
+    # Idle apps sleep and wake again (services/idle_apps.py, wake_deployment).
+    DeploymentStatus.SLEEPING: [
+        DeploymentStatus.WAKING,
+        DeploymentStatus.STOPPED,
+        DeploymentStatus.RUNNING,  # docker stop failed; it never really slept
+    ],
+    DeploymentStatus.WAKING: [
+        DeploymentStatus.RUNNING,
+        DeploymentStatus.SLEEPING,  # the wake job couldn't be queued
+        DeploymentStatus.STOPPED,
+        DeploymentStatus.FAILED,
     ],
     DeploymentStatus.FAILED: [],
     DeploymentStatus.STOPPED: []
@@ -61,7 +74,7 @@ def save_container_id(deployment, container_id:str) -> None:
 
 
 def _other_active_apps(db: Session, project: Project) -> int:
-    """The owner's other projects that are live or building.
+    """The owner's other projects that are live, asleep or building.
 
     This project isn't counted: a new deployment replaces its old one."""
 
@@ -71,7 +84,13 @@ def _other_active_apps(db: Session, project: Project) -> int:
         .filter(
             Project.user_id == project.user_id,
             Deployment.project_id != project.id,
-            Deployment.status.in_((*IN_PROGRESS_STATUSES, DeploymentStatus.RUNNING)),
+            # Sleeping apps still count: they come back on the next visit.
+            Deployment.status.in_((
+                *IN_PROGRESS_STATUSES,
+                DeploymentStatus.RUNNING,
+                DeploymentStatus.SLEEPING,
+                DeploymentStatus.WAKING,
+            )),
         )
         .distinct()
         .count()

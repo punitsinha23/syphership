@@ -4,7 +4,7 @@ import { getProjectDetails, createDeployment, deleteProject, getDeployments } fr
 import { getUser } from "../../api/user"
 import { connectGitHub } from "../../api/auth"
 import { formatDateTime, shortSha, timeAgo } from "../../utils/time"
-import { isInProgress } from "../../utils/deployment"
+import { isInProgress, isLive } from "../../utils/deployment"
 import { usePolling } from "../../hooks/usePolling"
 import { DeploymentCard } from "../../components/DeploymentCard/DeploymentCard"
 import { StatusBadge } from "../../components/StatusBadge/StatusBadge"
@@ -147,7 +147,7 @@ function ProjectDetails() {
 
     // The API returns deployments newest first
     const latest = deploymentHistory[0]
-    const live = deploymentHistory.find((item) => item.status === "RUNNING" && item.url)
+    const live = deploymentHistory.find((item) => isLive(item.status) && item.url)
 
     return (
             <div className="app-page">

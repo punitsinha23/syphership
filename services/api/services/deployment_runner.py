@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 import logging
 import os
@@ -25,6 +26,8 @@ from services.docker_services import (
     get_exposed_port,
     get_host_port,
     remove_deployment_resources,
+    deployment_resource_name,
+    start_container,
 )
 from services.app_routes import public_url, sync_app_routes
 from services.env_vars import read_env_vars
@@ -60,7 +63,12 @@ def _stop_previous_deployments(db, deployment) -> None:
             db.query(Deployment)
             .filter(
                 Deployment.project_id == deployment.project_id,
-                Deployment.status == DeploymentStatus.RUNNING,
+                # Sleeping ones too, or their stopped containers would stay forever.
+                Deployment.status.in_((
+                    DeploymentStatus.RUNNING,
+                    DeploymentStatus.SLEEPING,
+                    DeploymentStatus.WAKING,
+                )),
                 # Only older ones, so a slow old build never stops a newer one.
                 Deployment.id < deployment.id,
             )
@@ -113,6 +121,7 @@ def _mark_failed(
             DeploymentStatus.QUEUED,
             DeploymentStatus.BUILDING,
             DeploymentStatus.DEPLOYING,
+            DeploymentStatus.WAKING,
         )
     ):
         update_deployment_status(
@@ -330,6 +339,8 @@ def run_deployment(deployment_id: int) -> None:
 
             deployment.host_port = host_port
             deployment.url = public_url(project.id, project.name) or health_url
+            # Going live counts as activity, so a new app gets a full idle period.
+            deployment.last_active_at = datetime.now(timezone.utc)
 
             # 7. DEPLOYING -> RUNNING
             update_deployment_status(
@@ -385,6 +396,62 @@ def run_deployment(deployment_id: int) -> None:
         # Clean up source files after the build process.
         if repository_path is not None:
             shutil.rmtree(repository_path, ignore_errors=True)
+
+
+def wake_deployment(deployment_id: int) -> None:
+    """Start a WAKING deployment's stopped container again -> RUNNING.
+
+    Safe to run twice: anything that isn't WAKING anymore is skipped. If the
+    app can't be started it's marked FAILED; the owner has to deploy again."""
+
+    db = SessionLocal()
+    try:
+        deployment = db.query(Deployment).filter(Deployment.id == deployment_id).first()
+        if deployment is None or deployment.status != DeploymentStatus.WAKING:
+            return
+
+        try:
+            if not deployment.container_id:
+                raise DeploymentError("The app's container is missing. Deploy again.")
+
+            start_container(deployment.container_id)
+
+            if get_container_status(deployment.container_id) != "running":
+                raise DeploymentError("The app exited right after waking up. Deploy again.")
+
+            # Docker may pick a different host port on start.
+            image_tag = f"{deployment_resource_name(deployment.id)}:latest"
+            host_port = get_host_port(deployment.container_id, get_exposed_port(image_tag))
+            wait_for_healthy(f"http://{DEPLOYMENT_HOST}:{host_port}")
+
+            changed = (
+                db.query(Deployment)
+                .filter(Deployment.id == deployment_id, Deployment.status == DeploymentStatus.WAKING)
+                .update({
+                    Deployment.status: DeploymentStatus.RUNNING,
+                    Deployment.host_port: host_port,
+                    Deployment.last_active_at: datetime.now(timezone.utc),
+                })
+            )
+            db.commit()
+
+            if changed:
+                logger.info("Deployment %s woke up.", deployment_id)
+                sync_app_routes()
+            else:
+                # Replaced or deleted while waking; that code removes the container.
+                logger.info("Deployment %s changed while waking; leaving it.", deployment_id)
+
+        except Exception as error:
+            reason = str(error) if isinstance(error, DeploymentError) else (
+                "The app could not be woken up. Deploy again."
+            )
+            logger.exception("Deployment %s could not wake up.", deployment_id)
+            if _mark_failed(db, deployment_id, reason):
+                _remove_resources(deployment_id)
+                sync_app_routes()
+    finally:
+        db.close()
 
 
 def recover_deployment(deployment_id: int) -> None:

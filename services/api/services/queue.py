@@ -10,6 +10,7 @@ STREAM = "deployments"
 GROUP = "builders"
 DEAD_STREAM = "deployments:dead"
 ACTION_CLEANUP = "cleanup"
+ACTION_WAKE = "wake"
 APP_CHECK_KEY = "workers:app-check"
 APP_CHECK_SECONDS = 60
 # Must be longer than the slowest deployment (docker build alone can take 10 min).
@@ -49,6 +50,12 @@ def publish_cleanup(deployment_id: int) -> str:
     Only workers touch Docker, so the public API needs no access to it."""
 
     return redis_client.xadd(STREAM, {"action": ACTION_CLEANUP, "deployment_id": deployment_id})
+
+
+def publish_wake(deployment_id: int) -> str:
+    """Queue starting a sleeping deployment's container; returns the message ID."""
+
+    return redis_client.xadd(STREAM, {"action": ACTION_WAKE, "deployment_id": deployment_id})
 
 
 def delivery_count(message_id: str) -> int:

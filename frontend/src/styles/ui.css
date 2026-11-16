@@ -231,7 +231,8 @@
 /* In-progress states pulse to show activity */
 .status-queued .status-dot::after,
 .status-building .status-dot::after,
-.status-deploying .status-dot::after {
+.status-deploying .status-dot::after,
+.status-waking .status-dot::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -257,6 +258,8 @@
 .status-running { color: var(--color-status-running); }
 .status-failed { color: var(--color-status-failed); }
 .status-stopped { color: var(--color-text-muted); }
+.status-sleeping,
+.status-waking { color: var(--color-status-sleeping); }
 .status-none { color: var(--color-text-muted); }
 
 /* ================================

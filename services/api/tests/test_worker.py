@@ -27,7 +27,7 @@ def jobs(monkeypatch):
     monkeypatch.setattr(worker, "RECLAIM_IDLE_MS", 0)
 
     calls = []
-    for name in ("run_deployment", "recover_deployment", "fail_dead_lettered", "remove_deployment_resources"):
+    for name in ("run_deployment", "recover_deployment", "fail_dead_lettered", "remove_deployment_resources", "wake_deployment"):
         monkeypatch.setattr(worker, name, lambda deployment_id, name=name: calls.append((name, deployment_id)))
 
     queue.redis_client.delete(TEST_STREAM, TEST_DEAD_STREAM)
@@ -121,6 +121,25 @@ def test_cleanup_job_removes_resources_and_acks(jobs):
     assert pending_count() == 0
 
 
+def test_wake_job_wakes_the_deployment_and_acks(jobs):
+    queue.publish_wake(7)
+
+    worker.poll_once()
+
+    assert jobs == [("wake_deployment", 7)]
+    assert pending_count() == 0
+
+
+def test_abandoned_wake_job_is_woken_not_rebuilt(jobs):
+    queue.publish_wake(7)
+    deliver_without_ack(1)
+
+    worker.poll_once()
+
+    assert jobs == [("wake_deployment", 7)]
+    assert pending_count() == 0
+
+
 def test_abandoned_cleanup_job_is_retried(jobs):
     queue.publish_cleanup(7)
     deliver_without_ack(1)
@@ -162,6 +181,9 @@ def app_checks(monkeypatch):
     calls = []
     monkeypatch.setattr(worker, "APP_CHECK_KEY", TEST_CHECK_KEY)
     monkeypatch.setattr(worker, "fail_dead_deployments", lambda: calls.append("checked"))
+    monkeypatch.setattr(worker, "record_activity", lambda: calls.append("activity"))
+    monkeypatch.setattr(worker, "sleep_idle_apps", lambda: calls.append("sleep"))
+    monkeypatch.setattr(worker, "sync_app_routes", lambda: calls.append("routes"))
     queue.redis_client.delete(TEST_CHECK_KEY)
     yield calls
     queue.redis_client.delete(TEST_CHECK_KEY)
@@ -171,7 +193,7 @@ def test_only_one_worker_checks_apps_per_minute(app_checks):
     worker.check_apps_if_due()
     worker.check_apps_if_due()
 
-    assert app_checks == ["checked"]
+    assert app_checks == ["checked", "activity", "sleep", "routes"]
     assert 0 < queue.redis_client.ttl(TEST_CHECK_KEY) <= queue.APP_CHECK_SECONDS
 
 
@@ -182,3 +204,13 @@ def test_failed_app_check_does_not_stop_the_worker(app_checks, monkeypatch):
     monkeypatch.setattr(worker, "fail_dead_deployments", docker_down)
 
     worker.check_apps_if_due()
+
+
+def test_idle_check_still_runs_when_the_dead_app_check_fails(app_checks, monkeypatch):
+    def docker_down():
+        raise RuntimeError("Docker could not inspect the container.")
+    monkeypatch.setattr(worker, "fail_dead_deployments", docker_down)
+
+    worker.check_apps_if_due()
+
+    assert app_checks == ["activity", "sleep", "routes"]

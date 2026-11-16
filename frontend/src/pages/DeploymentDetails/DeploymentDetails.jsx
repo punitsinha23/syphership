@@ -1,5 +1,5 @@
 import { deleteDeployment, getDeployment, getDeploymentLogs, getProjectDetails } from "../../api/projects"
-import { isInProgress } from "../../utils/deployment"
+import { isInProgress, isLive } from "../../utils/deployment"
 import { usePolling } from "../../hooks/usePolling"
 import { useState, useEffect } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
@@ -97,7 +97,7 @@ function DeploymentDetails() {
     })
 
     async function handleDelete() {
-        const warning = deploymentDetails.status === "RUNNING"
+        const warning = isLive(deploymentDetails.status)
             ? "This deployment is live. Deleting it takes the site offline."
             : "This removes the deployment and its build logs."
         if (!window.confirm(`Delete deployment ${shortSha(deploymentDetails.commit_sha)}?\n\n${warning}`)) return
@@ -186,7 +186,7 @@ function DeploymentDetails() {
                         </section>
 
                         <section className="section card deployment-info" aria-label="Details">
-                            {d.status === "RUNNING" && d.url && (
+                            {isLive(d.status) && d.url && (
                                 <div className="deployment-info-item deployment-info-wide">
                                     <span className="deployment-info-label">Live URL</span>
                                     <a

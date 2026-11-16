@@ -71,6 +71,10 @@ services:
       # On the server set CADDY_DIR=/etc/caddy in .env; locally an unused ./.caddy is made.
       - ${CADDY_DIR:-./.caddy}:/etc/caddy
 
+      # Caddy's per-app access logs, read-only: their timestamps show when an
+      # app was last used (services/idle_apps.py). Server: CADDY_LOG_DIR=/var/log/caddy/apps
+      - ${CADDY_LOG_DIR:-./.caddy-logs}:/var/log/caddy/apps:ro
+
     # Let the current build finish on "docker stop" (build timeout is 10 min).
     stop_grace_period: 15m
 

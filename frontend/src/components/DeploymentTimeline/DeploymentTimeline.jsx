@@ -8,8 +8,8 @@ const stages = [
 ];
 
 function stepState(index, currentIndex, status) {
-  // A stopped deployment ran successfully before it was replaced
-  if (status === "RUNNING" || status === "STOPPED" || index < currentIndex) return "done";
+  // Stopped and sleeping deployments ran successfully before
+  if (["RUNNING", "STOPPED", "SLEEPING", "WAKING"].includes(status) || index < currentIndex) return "done";
   if (index === currentIndex) return status === "FAILED" ? "error" : "active";
   return "pending";
 }
@@ -59,6 +59,17 @@ export default function DeploymentTimeline({ status, failedStage }) {
           <span className="pipeline-index">ERR</span>
           <span className="pipeline-label">Failed</span>
           <span className="pipeline-hint">Deployment stopped</span>
+        </li>
+      )}
+
+      {(status === "SLEEPING" || status === "WAKING") && (
+        <li className="pipeline-step pipeline-step-unknown">
+          <span className="pipeline-node" aria-hidden="true" />
+          <span className="pipeline-index">ZZZ</span>
+          <span className="pipeline-label">{status === "WAKING" ? "Waking up" : "Asleep"}</span>
+          <span className="pipeline-hint">
+            {status === "WAKING" ? "Starting again for a visitor" : "Unused for a while; wakes on the next visit"}
+          </span>
         </li>
       )}
 

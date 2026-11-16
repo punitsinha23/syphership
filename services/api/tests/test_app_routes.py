@@ -3,10 +3,13 @@ import pytest
 import services.app_routes as routes
 from models.deployment import Deployment, DeploymentStatus
 from models.project import Project
+from services.app_routes import AppRoute
 from tests.conftest import TestingSessionLocal
 
 
 DOMAIN = "apps.example.com"
+RUNNING = DeploymentStatus.RUNNING
+SLEEPING = DeploymentStatus.SLEEPING
 
 
 @pytest.fixture
@@ -15,6 +18,7 @@ def caddy(monkeypatch, tmp_path):
     monkeypatch.setattr(routes, "APPS_DOMAIN", DOMAIN)
     monkeypatch.setattr(routes, "SessionLocal", TestingSessionLocal)
     monkeypatch.setattr(routes, "CADDY_ROUTES_FILE", tmp_path / "apps.caddy")
+    monkeypatch.setattr(routes, "APP_LOG_DIR", tmp_path / "logs")
 
     state = {"reloads": 0, "fail": False}
 
@@ -63,14 +67,25 @@ def test_no_public_url_without_apps_domain(monkeypatch):
     assert routes.public_url(7, "My App") is None
 
 
-def test_render_routes_proxies_each_app_to_its_local_port(monkeypatch):
-    monkeypatch.setattr(routes, "APPS_DOMAIN", DOMAIN)
-
-    content = routes.render_routes([(2, "Blog", 32769), (1, "Shop", 32768)])
+def test_running_app_is_proxied_to_its_local_port_and_logged(caddy):
+    content = routes.render_routes([AppRoute(1, "Shop", RUNNING, 32768)])
 
     assert content.startswith(routes.ROUTES_HEADER)
-    assert f"shop-1.{DOMAIN} {{\n    reverse_proxy 127.0.0.1:32768\n}}" in content
-    assert f"blog-2.{DOMAIN} {{\n    reverse_proxy 127.0.0.1:32769\n}}" in content
+    assert f"shop-1.{DOMAIN} {{" in content
+    assert "    reverse_proxy 127.0.0.1:32768\n" in content
+    assert f"output file {routes.APP_LOG_DIR}/shop-1.{DOMAIN}.log" in content
+    assert "roll_size 1mb" in content
+
+
+def test_sleeping_app_is_sent_to_the_wake_page(caddy):
+    content = routes.render_routes([AppRoute(3, "Blog", SLEEPING, 32768)])
+
+    assert f"blog-3.{DOMAIN} {{" in content
+    assert "rewrite * /apps/3/wake" in content
+    assert f"reverse_proxy {routes.API_UPSTREAM}" in content
+    assert "127.0.0.1:32768" not in content
+    # Visits while asleep are logged too, like any other visit.
+    assert "output file" in content
 
 
 def test_sync_does_nothing_without_apps_domain(monkeypatch, tmp_path):
@@ -82,13 +97,13 @@ def test_sync_does_nothing_without_apps_domain(monkeypatch, tmp_path):
     assert not (tmp_path / "apps.caddy").exists()
 
 
-def test_sync_routes_only_the_newest_running_deployment(make_user, caddy):
+def test_sync_routes_only_the_newest_routed_deployment(make_user, caddy):
     project_id = add_project(
         make_user,
         deployments=[
             (DeploymentStatus.STOPPED, 30001),
-            (DeploymentStatus.RUNNING, 30002),  # old one, still running mid-redeploy
-            (DeploymentStatus.RUNNING, 30003),  # new one
+            (RUNNING, 30002),  # old one, still running mid-redeploy
+            (RUNNING, 30003),  # new one
             (DeploymentStatus.FAILED, 30004),
         ],
     )
@@ -102,8 +117,16 @@ def test_sync_routes_only_the_newest_running_deployment(make_user, caddy):
     assert caddy["reloads"] == 1
 
 
+def test_sync_routes_sleeping_apps_to_the_wake_page(make_user, caddy):
+    project_id = add_project(make_user, deployments=[(SLEEPING, 30001)])
+
+    routes.sync_app_routes()
+
+    assert f"rewrite * /apps/{project_id}/wake" in caddy["file"].read_text()
+
+
 def test_sync_reloads_caddy_only_when_routes_change(make_user, caddy):
-    add_project(make_user, deployments=[(DeploymentStatus.RUNNING, 30001)])
+    add_project(make_user, deployments=[(RUNNING, 30001)])
 
     routes.sync_app_routes()
     routes.sync_app_routes()
@@ -123,7 +146,7 @@ def test_sync_removes_routes_of_apps_that_stopped(make_user, caddy):
 def test_failed_reload_restores_the_old_file_so_the_next_sync_retries(make_user, caddy):
     previous = routes.ROUTES_HEADER
     caddy["file"].write_text(previous)
-    add_project(make_user, deployments=[(DeploymentStatus.RUNNING, 30001)])
+    add_project(make_user, deployments=[(RUNNING, 30001)])
     caddy["fail"] = True
 
     routes.sync_app_routes()  # must not raise

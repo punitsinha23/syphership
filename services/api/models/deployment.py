@@ -11,6 +11,10 @@ class DeploymentStatus(str, Enum):
     FAILED = "FAILED"
     # Replaced by a newer deployment of the same project; container removed.
     STOPPED = "STOPPED"
+    # Unused for too long; container stopped but kept, so it can start again.
+    SLEEPING = "SLEEPING"
+    # A visitor arrived while SLEEPING; the worker is starting the container.
+    WAKING = "WAKING"
 
 class Deployment(Base):
     __tablename__ = "deployments"
@@ -47,6 +51,8 @@ class Deployment(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+    # Last time the app got a request (or went live). Apps idle for too long are put to sleep.
+    last_active_at = Column(DateTime(timezone=True), nullable=True)
     failure_reason = Column(String)
     # Status the deployment was in when it failed, so the UI can show the failed stage.
     failed_stage = Column(SQLEnum(DeploymentStatus), nullable=True)

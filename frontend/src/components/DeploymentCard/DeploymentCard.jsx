@@ -4,7 +4,7 @@ import { Link } from "react-router-dom"
 import { deleteDeployment } from "../../api/projects"
 import { StatusBadge } from "../StatusBadge/StatusBadge"
 import { formatDateTime, shortSha, timeAgo } from "../../utils/time"
-import { isInProgress } from "../../utils/deployment"
+import { isInProgress, isLive } from "../../utils/deployment"
 
 // One row of a project's deployment list (rendered inside a <ul>)
 export function DeploymentCard({ deployment, onDeleted }) {
@@ -14,7 +14,7 @@ export function DeploymentCard({ deployment, onDeleted }) {
     const status = deployment.status
 
     async function handleDelete() {
-        const warning = status === "RUNNING"
+        const warning = isLive(status)
             ? "This deployment is live. Deleting it takes the site offline."
             : "This removes the deployment and its build logs."
         if (!window.confirm(`Delete deployment ${shortSha(deployment.commit_sha)}?\n\n${warning}`)) return
@@ -51,7 +51,7 @@ export function DeploymentCard({ deployment, onDeleted }) {
                 </time>
 
                 <div className="deployment-row-actions">
-                    {status === "RUNNING" && deployment.url && (
+                    {isLive(status) && deployment.url && (
                         <a
                             className="btn btn-secondary btn-sm"
                             href={deployment.url}

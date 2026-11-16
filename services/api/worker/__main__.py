@@ -8,6 +8,7 @@ from services.queue import (
     ensure_group,
     redis_client,
     ACTION_CLEANUP,
+    ACTION_WAKE,
     APP_CHECK_KEY,
     APP_CHECK_SECONDS,
     GROUP,
@@ -22,8 +23,10 @@ from services.deployment_runner import (
     fail_dead_lettered,
     recover_deployment,
     run_deployment,
+    wake_deployment,
 )
 from services.app_routes import sync_app_routes
+from services.idle_apps import record_activity, sleep_idle_apps
 from services.docker_services import ensure_network, remove_deployment_resources
 
 
@@ -61,6 +64,20 @@ def is_cleanup(fields: dict) -> bool:
     """True for a "remove this container" job; build jobs have no action."""
 
     return fields.get("action") == ACTION_CLEANUP
+
+
+def is_wake(fields: dict) -> bool:
+    """True for a "start this sleeping app" job."""
+
+    return fields.get("action") == ACTION_WAKE
+
+
+def handle_wake(message_id: str, deployment_id: int) -> None:
+    """Start a sleeping app a visitor is waiting for. Skips it if not WAKING."""
+
+    logger.info("Waking deployment %s (message %s).", deployment_id, message_id)
+    wake_deployment(deployment_id)
+    redis_client.xack(STREAM, GROUP, message_id)
 
 
 def handle_cleanup(message_id: str, deployment_id: int) -> None:
@@ -107,6 +124,9 @@ def handle_reclaimed(message_id: str, fields: dict) -> None:
     if is_cleanup(fields):
         handle_cleanup(message_id, deployment_id)
         return
+    if is_wake(fields):
+        handle_wake(message_id, deployment_id)
+        return
     logger.info("Recovering deployment %s (message %s).", deployment_id, message_id)
     recover_deployment(deployment_id)
     redis_client.xack(STREAM, GROUP, message_id)
@@ -120,6 +140,9 @@ def handle_new(message_id: str, fields: dict) -> None:
         return
     if is_cleanup(fields):
         handle_cleanup(message_id, deployment_id)
+        return
+    if is_wake(fields):
+        handle_wake(message_id, deployment_id)
         return
     logger.info("Picked up deployment %s (message %s).", deployment_id, message_id)
     run_deployment(deployment_id)
@@ -141,7 +164,8 @@ def poll_once() -> None:
 
 
 def check_apps_if_due() -> None:
-    """Look for dead apps once a minute, across all workers."""
+    """Once a minute, across all workers: fail dead apps, put idle ones to
+    sleep, and keep Caddy's routes in line with the database."""
 
     # The key expires by itself, so whichever worker sets it does the check.
     if not redis_client.set(APP_CHECK_KEY, "1", nx=True, ex=APP_CHECK_SECONDS):
@@ -152,6 +176,12 @@ def check_apps_if_due() -> None:
     except Exception:
         # A failed check must not stop the worker from building.
         logger.exception("Could not check running apps.")
+
+    try:
+        record_activity()
+        sleep_idle_apps()
+    except Exception:
+        logger.exception("Could not check for idle apps.")
 
     # Drops routes of apps that died, and retries a reload that failed earlier.
     sync_app_routes()

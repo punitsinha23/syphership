@@ -41,6 +41,7 @@ function Dashboard() {
         { label: "Projects", value: projects.length },
         { label: "Deployments", value: deployments.length },
         { label: "Running", value: latestStatuses.filter((s) => s === "RUNNING").length, tone: "running" },
+        { label: "Asleep", value: latestStatuses.filter((s) => s === "SLEEPING" || s === "WAKING").length },
         { label: "Failing", value: latestStatuses.filter((s) => s === "FAILED").length, tone: "failed" },
     ]
 

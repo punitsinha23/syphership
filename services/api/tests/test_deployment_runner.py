@@ -105,6 +105,7 @@ def test_successful_deployment_is_running_with_url(make_user, pipeline):
     assert deployment.container_id == "abc123container"
     assert deployment.host_port == 49153
     assert deployment.url == "http://localhost:49153"
+    assert deployment.last_active_at is not None
     assert deployment.failure_reason is None
     assert deployment.build_logs == "#1 DONE\n"
 

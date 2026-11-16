@@ -280,6 +280,40 @@ def run_docker_container(
     except FileNotFoundError:
         raise RuntimeError("Docker executable could not be found.") from None
 
+def _container_action(action: str, container_id: str, timeout: int) -> None:
+    """Run "docker stop|start <container>"; raises RuntimeError if it fails."""
+
+    if not isinstance(container_id, str) or not container_id.strip():
+        raise ValueError("Invalid container ID.")
+
+    try:
+        subprocess.run(
+            ["docker", action, container_id.strip()],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"docker {action} timed out.") from None
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"docker {action} failed: {_output_text(e.stderr)[:300]}") from None
+    except FileNotFoundError:
+        raise RuntimeError("Docker executable could not be found.") from None
+
+
+def stop_container(container_id: str) -> None:
+    """Stop a container but keep it, so start_container can bring it back.
+
+    Unlike "docker pause", this frees the app's memory."""
+    _container_action("stop", container_id, timeout=60)
+
+
+def start_container(container_id: str) -> None:
+    """Start a stopped container. Its host port may change; read it again."""
+    _container_action("start", container_id, timeout=60)
+
+
 def get_container_status(container_id: str) -> str:
     if not isinstance(container_id, str) or not container_id.strip():
         raise ValueError("Invalid container ID.")
